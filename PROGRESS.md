@@ -4,7 +4,33 @@ Session handoff log. Most recent entry on top. Keep this file under 200 lines.
 
 ---
 
-## 2026-04-30 — Phase 1 Bootstrap (in progress)
+## 2026-04-30 — Phase 2 DB + Auth (DONE)
+
+### Completed
+- Migration `supabase/migrations/0001_init.sql` written and applied to Supabase project: 10 tables (materials, items, reviews, sessions, topic_audits, knowledge_gaps, usage_logs, calibration_offsets, processing_jobs, material_relations), RLS policies on every table (`auth.uid() = user_id`), 11 performance indexes (ivfflat for embeddings, GIN FTS, hot-path composites), 3 extensions (vector, pg_cron, pgcrypto), shared `set_updated_at()` trigger
+- `app/(auth)/login/page.tsx` — Magic Link form, Polish UI, error handling
+- `app/auth/callback/route.ts` — PKCE code exchange path
+- `app/auth/finish/page.tsx` — implicit-flow fallback (reads `#access_token` from hash, calls `setSession` client-side). Belt-and-suspenders: handles both Supabase email-link variants
+- `app/(app)/dashboard/page.tsx` — protected page, server-action sign-out
+- `app/page.tsx` — root redirect (authed → /dashboard, else → /login)
+- Magic Link end-to-end verified: user signed in successfully on first try after the implicit-flow fallback was added
+
+### Lessons learned
+- Supabase email "Confirm signup" template uses an implicit-flow link (token in URL hash, never reaches server). Even with `@supabase/ssr` (which uses PKCE for `signInWithOtp`), Supabase may send the implicit variant for the first email-confirmation. Solution: server callback redirects no-code requests to a tiny client page (`/auth/finish`) that reads `window.location.hash` and calls `setSession`. Now both flows work transparently. Captured in `tasks/lessons.md`.
+- `otp_expired` errors on first attempt were caused by mail client link-preview consuming the token. Subsequent fresh links worked.
+
+### Next session pickup
+1. Phase 3: AI layer + cost tracking. Files to create:
+   - `lib/ai/pricing.ts`, `lib/ai/operations.ts`, `lib/ai/track.ts`, `lib/ai/limits.ts`
+   - `lib/ai/anthropic.ts`, `lib/ai/voyage.ts`
+   - `lib/ai/prompts/*.ts` (compress, auto-tag, generate-cloze, generate-open, validate-open)
+   - `tools/smoke-ai.ts`
+2. Voyage AI key still pending — Anthropic-only smoke test is fine for Phase 3 start.
+3. Generate types: `npx supabase gen types typescript --project-id <id> > lib/db/database.types.ts` once we start querying tables.
+
+---
+
+## 2026-04-30 — Phase 1 Bootstrap (DONE)
 
 ### Completed
 - Renamed project folder `Learning Loop/` → `learning-loop/` (npm naming rules)

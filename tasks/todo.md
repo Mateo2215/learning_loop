@@ -2,9 +2,9 @@
 
 ## Current State
 
-**Phase 1 (Bootstrap) — IN PROGRESS**
+**Phase 1 (Bootstrap) — DONE.** **Phase 2 (DB + Auth) — DONE.** **Phase 3 (AI layer + cost tracking) — NEXT.**
 
-Bootstrapped Next.js 16 (App Router, TypeScript strict, Tailwind v4, ESLint, Turbopack) with shadcn/ui and core dependencies. Folder structure laid out per CLAUDE.md. Supabase SSR clients stubbed. `.env.local` populated locally (git-ignored).
+Magic Link auth verified end-to-end. Schema deployed to Supabase. Dashboard renders authenticated user. Ready for AI layer.
 
 ### Files modified / created so far
 - `package.json` — Next 16.2.4, React 19.2, all CLAUDE.md core deps installed
@@ -37,13 +37,14 @@ Bootstrapped Next.js 16 (App Router, TypeScript strict, Tailwind v4, ESLint, Tur
 - [ ] Verify `npm run dev` works
 - [ ] First git commit
 
-### Phase 2 — DB + Auth (NEXT)
-- [ ] P1: `supabase/migrations/0001_init.sql` with all tables + RLS + indexes
-- [ ] P1: Apply migration to Supabase project
-- [ ] P1: `npx supabase gen types typescript` → `lib/db/database.types.ts`
-- [ ] P1: `app/(auth)/login/page.tsx` (Magic Link form)
-- [ ] P1: `app/(auth)/callback/route.ts`
-- [ ] P1: Test RLS (anon query returns 0 rows)
+### Phase 2 — DB + Auth (DONE)
+- [x] `supabase/migrations/0001_init.sql` with all tables + RLS + indexes
+- [x] Apply migration to Supabase project (10 tables, all RLS-enabled)
+- [x] `app/(auth)/login/page.tsx` (Magic Link form, PL UI)
+- [x] `app/auth/callback/route.ts` (PKCE) + `app/auth/finish/page.tsx` (implicit fallback)
+- [x] `app/(app)/dashboard/page.tsx` (protected, server-action sign-out)
+- [x] Magic Link end-to-end verified — login → /dashboard renders user email
+- [ ] P2: `npx supabase gen types typescript` → `lib/db/database.types.ts` (deferred to Phase 3 when we start querying tables from code)
 
 ### Phase 3 — AI layer + cost tracking
 - [ ] P1: `lib/ai/pricing.ts`, `lib/ai/operations.ts`

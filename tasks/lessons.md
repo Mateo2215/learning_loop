@@ -20,7 +20,9 @@ Project-specific gotchas. For universal patterns see `../../global-lessons.md`.
 
 ## Supabase
 
-- (none yet — to fill during Phase 2)
+- **Magic Link emails may use implicit flow even when client uses PKCE.** `@supabase/ssr` v0.10 sends `signInWithOtp` requests with PKCE, but Supabase's default "Confirm signup" email template still generates implicit-flow links (token in URL hash, e.g. `#access_token=...&refresh_token=...`). The hash never reaches the server, so a server-only `/auth/callback` handler that only looks at `?code=` will fail with "missing_code". Solution: server callback redirects no-code requests to a client page (`/auth/finish`) that reads `window.location.hash` and calls `supabase.auth.setSession({ access_token, refresh_token })`. Now both Magic Link variants land on /dashboard.
+- **Mail link-preview can consume Magic Links before the user clicks them**, causing `otp_expired` on first attempt. Outlook desktop and some Gmail filters fetch URLs in the background to show previews. If a fresh link works on second try, this is the cause. Workaround: tell the user to ignore expired-link errors and request a fresh one.
+- **`signInWithOtp` does NOT differentiate signup vs login.** First call for a new email triggers signup confirmation. Subsequent calls send a Magic Link as expected. There's no separate "register" UI needed.
 
 ## AI cost / latency
 
