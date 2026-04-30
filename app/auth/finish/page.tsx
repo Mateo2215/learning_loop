@@ -1,0 +1,49 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
+
+export default function AuthFinishPage() {
+  const router = useRouter();
+  const params = useSearchParams();
+  const [message, setMessage] = useState("Kończę logowanie…");
+
+  useEffect(() => {
+    const next = params.get("next") ?? "/dashboard";
+    const hash = window.location.hash.replace(/^#/, "");
+    const hashParams = new URLSearchParams(hash);
+
+    const accessToken = hashParams.get("access_token");
+    const refreshToken = hashParams.get("refresh_token");
+    const hashError = hashParams.get("error_description") ?? hashParams.get("error");
+
+    if (hashError) {
+      router.replace(`/login?error=${encodeURIComponent(hashError)}`);
+      return;
+    }
+
+    if (!accessToken || !refreshToken) {
+      router.replace("/login?error=missing_tokens");
+      return;
+    }
+
+    const supabase = createClient();
+    supabase.auth
+      .setSession({ access_token: accessToken, refresh_token: refreshToken })
+      .then(({ error }) => {
+        if (error) {
+          router.replace(`/login?error=${encodeURIComponent(error.message)}`);
+          return;
+        }
+        setMessage("Zalogowano. Przekierowuję…");
+        router.replace(next);
+      });
+  }, [params, router]);
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-zinc-50 dark:bg-black">
+      <p className="text-sm text-zinc-600 dark:text-zinc-400">{message}</p>
+    </div>
+  );
+}
