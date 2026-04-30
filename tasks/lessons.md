@@ -9,6 +9,8 @@ Project-specific gotchas. For universal patterns see `../../global-lessons.md`.
 - **Next.js 16 ships its own `CLAUDE.md` that imports `AGENTS.md`** via `@AGENTS.md` syntax. Our project CLAUDE.md is the source of truth — we overwrite the bootstrap one but keep `AGENTS.md` (contains useful warning that Next.js 16 has breaking changes vs training data).
 - **shadcn `init --yes` still prompts** for the component library choice (Radix vs Base). Workaround: pre-create `components.json` manually with `style: "new-york"`, then `add` works without prompts.
 - **shadcn does not install `clsx`, `tailwind-merge`, `class-variance-authority`, `@radix-ui/react-slot` automatically** — must install manually before any component will compile.
+- **Next.js 16 renamed `middleware.ts` → `proxy.ts`** (and the exported function from `middleware()` → `proxy()`). The matcher config and request handling stay identical. The dev server logs a deprecation warning but still runs the old file. Codemod available: `npx @next/codemod@canary middleware-to-proxy .`. Affects only the root convention file — internal helpers like `lib/supabase/middleware.ts` keep their names.
+- **Killing background dev servers on Windows requires `taskkill //PID <pid> //F`** — `pkill` and `kill %1` from bash do not actually terminate the Node process holding the port. Always check `netstat -ano | findstr :3000` to confirm port is free before restarting.
 
 ## Security (env / secrets)
 
