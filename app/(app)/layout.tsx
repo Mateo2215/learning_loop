@@ -30,6 +30,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <nav className="flex items-center gap-1">
             <NavLink href="/dashboard" label="Dashboard" />
             <NavLink href="/materials" label="Materiały" />
+            <NavLink href="/sessions/review" label="Review" />
             <span className="hidden sm:inline-block text-xs text-zinc-500 dark:text-zinc-400 font-mono mx-3">
               {user.email}
             </span>

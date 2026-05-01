@@ -36,8 +36,11 @@ export default async function DashboardPage() {
         </Card>
       </div>
 
-      <div className="flex gap-3">
+      <div className="flex flex-wrap gap-3">
         <Button asChild>
+          <Link href="/sessions/review">Zacznij Review →</Link>
+        </Button>
+        <Button variant="outline" asChild>
           <Link href="/materials/import">+ Nowy materiał</Link>
         </Button>
         <Button variant="outline" asChild>

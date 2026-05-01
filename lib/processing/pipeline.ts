@@ -15,6 +15,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { trackAICall } from "@/lib/ai/track";
 import { compressMaterial, autoTagMaterial } from "./compress-and-tag";
 import { generateClozeCards, generateOpenQuestions } from "./generate-items";
+import { initialFsrsState } from "@/lib/fsrs/scheduler";
 import type { Category, ImportJobPayload } from "@/lib/db/types";
 
 const VECTOR_DIM = 1024;
@@ -97,6 +98,7 @@ export async function processMaterial(ctx: PipelineContext): Promise<{ materialI
       metadata: { jobId },
       call: () => generateClozeCards(compressed).then((r) => ({ result: r.cards, usage: r.usage })),
     });
+    const fsrsInit = initialFsrsState();
     const clozeRows = clozeRes.result.map((card) => ({
       user_id: userId,
       material_id: materialId,
@@ -107,6 +109,7 @@ export async function processMaterial(ctx: PipelineContext): Promise<{ materialI
       difficulty: card.difficulty,
       category,
       tags,
+      ...fsrsInit,
     }));
     if (clozeRows.length > 0) {
       const { error } = await supabase.from("items").insert(clozeRows);
