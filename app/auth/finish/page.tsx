@@ -1,10 +1,20 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
 export default function AuthFinishPage() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-zinc-50 dark:bg-black">
+      <Suspense fallback={<p className="text-sm text-zinc-600 dark:text-zinc-400">Kończę logowanie…</p>}>
+        <FinishInner />
+      </Suspense>
+    </div>
+  );
+}
+
+function FinishInner() {
   const router = useRouter();
   const params = useSearchParams();
   const [message, setMessage] = useState("Kończę logowanie…");
@@ -41,9 +51,5 @@ export default function AuthFinishPage() {
       });
   }, [params, router]);
 
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-zinc-50 dark:bg-black">
-      <p className="text-sm text-zinc-600 dark:text-zinc-400">{message}</p>
-    </div>
-  );
+  return <p className="text-sm text-zinc-600 dark:text-zinc-400">{message}</p>;
 }

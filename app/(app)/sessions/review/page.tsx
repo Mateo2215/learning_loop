@@ -33,7 +33,7 @@ export default function ReviewSessionPage() {
   const [items, setItems] = useState<ReviewItem[]>([]);
   const [index, setIndex] = useState(0);
   const [answeredCount, setAnsweredCount] = useState(0);
-  const [questionShownAt, setQuestionShownAt] = useState<number>(Date.now());
+  const [questionShownAt, setQuestionShownAt] = useState<number>(0);
 
   // Start session on mount.
   useEffect(() => {

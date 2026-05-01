@@ -40,7 +40,7 @@ export default function DeepDivePage({ params }: { params: Promise<{ material_id
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [items, setItems] = useState<OpenItem[]>([]);
   const [index, setIndex] = useState(0);
-  const [questionShownAt, setQuestionShownAt] = useState<number>(Date.now());
+  const [questionShownAt, setQuestionShownAt] = useState<number>(0);
   const [userAnswer, setUserAnswer] = useState("");
   const [feedback, setFeedback] = useState<AnswerResponse | null>(null);
   const [calibrationPicked, setCalibrationPicked] = useState<"agree" | "too_strict" | "too_lenient" | null>(null);
