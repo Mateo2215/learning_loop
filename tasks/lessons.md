@@ -11,6 +11,7 @@ Project-specific gotchas. For universal patterns see `../../global-lessons.md`.
 - **shadcn does not install `clsx`, `tailwind-merge`, `class-variance-authority`, `@radix-ui/react-slot` automatically** — must install manually before any component will compile.
 - **Next.js 16 renamed `middleware.ts` → `proxy.ts`** (and the exported function from `middleware()` → `proxy()`). The matcher config and request handling stay identical. The dev server logs a deprecation warning but still runs the old file. Codemod available: `npx @next/codemod@canary middleware-to-proxy .`. Affects only the root convention file — internal helpers like `lib/supabase/middleware.ts` keep their names.
 - **Killing background dev servers on Windows requires `taskkill //PID <pid> //F`** — `pkill` and `kill %1` from bash do not actually terminate the Node process holding the port. Always check `netstat -ano | findstr :3000` to confirm port is free before restarting.
+- **Dev server can die silently after long sessions** (HMR + many file edits + auth redirect loops). Symptom: `ERR_CONNECTION_REFUSED` in browser. Fix: `netstat -ano | findstr :3000` to confirm dead, then `npm run dev` again. Not an app problem — a dev-mode quirk on Windows.
 
 ## Security (env / secrets)
 
