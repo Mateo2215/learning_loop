@@ -1,15 +1,26 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
+import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 export default function LoginPage() {
+  const params = useSearchParams();
   const [email, setEmail] = useState("");
   const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Surface ?error=... messages from /auth/callback as toasts on first paint.
+  useEffect(() => {
+    const err = params.get("error");
+    if (err) {
+      toast.error("Logowanie nie powiodło się", { description: err });
+    }
+  }, [params]);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -27,9 +38,11 @@ export default function LoginPage() {
     if (error) {
       setStatus("error");
       setErrorMessage(error.message);
+      toast.error("Nie udało się wysłać linku", { description: error.message });
       return;
     }
     setStatus("sent");
+    toast.success("Link wysłany", { description: `Sprawdź ${email}.` });
   }
 
   return (
