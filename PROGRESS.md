@@ -4,6 +4,39 @@ Session handoff log. Most recent entry on top. Keep this file under 200 lines.
 
 ---
 
+## 2026-05-01 — Phase 4 Material import + processing pipeline (DONE)
+
+### Completed
+- `lib/processing/parse.ts`: DOCX (mammoth) / MD / TXT / pasted-text parser. 5 MB max, 100-200k char range for paste. Returns ParseResult with sourceType + filename + extracted text.
+- `lib/processing/compress-and-tag.ts`: `compressMaterial(rawText)` → ~30% length via Haiku. `autoTagMaterial(compressed)` → 3-5 tags, Zod-validated JSON.
+- `lib/processing/generate-items.ts`: `generateClozeCards()` (10-25 cards) and `generateOpenQuestions()` (5-12 questions), each with tolerant JSON parser (handles markdown fences) and Zod schemas. Returns items + token usage.
+- `lib/processing/pipeline.ts`: `processMaterial(ctx)` 9-step orchestrator. Steps: parse (already done at API) → category (user-provided) → embed (MOCKED — TODO voyage) → dedup (skipped while mocked) → compress → auto-tag → insert material → generate cloze + insert items → generate open + insert items → schedule day_7/30/90 audits → mark material ready. Each AI step wrapped in trackAICall, each DB step has explicit error handling, failures mark job as `failed`.
+- `app/api/materials/import/route.ts`: POST multipart endpoint. Validates form (Zod), parses file or pasted text, creates `processing_jobs` row, fires `processMaterial` async, returns `{ job_id }`.
+- `app/api/jobs/[id]/route.ts`: GET endpoint returns job state (status, progress, error, result). Used by import page polling.
+- `app/(app)/materials/import/page.tsx`: client form with two tabs (file / paste), category select, progress bar with stage labels, polling 1.5s, redirects to detail view on success.
+- `app/(app)/materials/page.tsx`: list view sorted by imported_at desc, status badges (processing/ready/failed), tag chips, empty state CTA.
+- `app/(app)/materials/[id]/page.tsx`: detail view — compressed content + tags + cloze list + open question list with answer references.
+- `app/(app)/layout.tsx`: shared top nav with Dashboard/Materials/sign-out. Server-side auth guard.
+- `app/layout.tsx`: Polish `lang="pl"`, default dark mode, Sonner `<Toaster />` mounted.
+- Toasts wired in /login (callback errors, link-sent success) and /materials/import (start failure, completion success with counts, pipeline failure).
+- `lib/db/types.ts`: hand-maintained TS types for all tables, plus `CATEGORIES` and `CATEGORY_LABELS` consts.
+
+### Verification
+- TS strict compiles clean.
+- User imported a real material end-to-end. Pipeline produced compressed content, tags, ~10-20 cloze cards, ~5-8 open questions. Detail view rendered correctly. usage_logs got 4 new rows per import (compress_material, auto_tag_material, generate_cloze, generate_open).
+
+### Lessons learned
+- `npx supabase gen types typescript --project-id …` requires a separate access token (Supabase Personal Access Token, not the project anon/service keys). Decided to maintain `lib/db/types.ts` by hand for now — schema is small, stable, and adding another secret to the loop wasn't worth it.
+- Voyage SDK's pricing is trivial (\$0.06/M tokens, ~no impact at our scale) but the dashboard for getting an API key was unresponsive on first try. Pipeline ships with a deterministic stub vector so M1 testing isn't blocked. Replace it before any dedup/semantic-search feature lands.
+
+### Next session pickup (Phase 5 — Review session: cloze + FSRS)
+1. `lib/fsrs/scheduler.ts` — wrap `ts-fsrs` with our config (request_retention 0.90, max_interval 365, fuzz on). Functions: `scheduleNew(item)`, `applyRating(item, rating, now)`, `getDueItems(userId, limit)`.
+2. `app/api/sessions/start/route.ts` — mode 'review': returns due items (limit 25 new/day + reviews) pre-loaded.
+3. `app/api/sessions/[id]/answer/route.ts` — mode 'review': stores review row, updates FSRS state on item.
+4. `app/(app)/sessions/review/page.tsx` — cloze flashcard UI: front → reveal → 4 buttons (Again/Hard/Good/Easy). No AI validation needed for cloze (exact match).
+
+---
+
 ## 2026-05-01 — Phase 3 AI layer + cost tracking (DONE)
 
 ### Completed

@@ -2,9 +2,9 @@
 
 ## Current State
 
-**Phase 1 (Bootstrap) — DONE.** **Phase 2 (DB + Auth) — DONE.** **Phase 3 (AI layer + cost tracking) — DONE.** **Phase 4 (Material import + processing pipeline) — NEXT.**
+**Phases 1-4 DONE.** **Phase 5 (Review session — cloze + FSRS) — NEXT.**
 
-trackAICall verified end-to-end: Haiku call → usage_logs row with token counts and \$0.000101 cost. Cost limits and prompt caching infrastructure ready. Voyage key still pending — pipeline embed step (Phase 4 step 3) will block until user provides one.
+Full import pipeline runs end-to-end (parse → compress → tag → generate cloze + open → schedule audits → mark ready). User tested with real material, all 4 AI ops logged in usage_logs, items materialized in DB. Embeddings still mocked (Voyage key pending). Shared `(app)` layout with top nav and Sonner toasts in place.
 
 ### Files modified / created so far
 - `package.json` — Next 16.2.4, React 19.2, all CLAUDE.md core deps installed
@@ -55,12 +55,19 @@ trackAICall verified end-to-end: Haiku call → usage_logs row with token counts
 - [x] `lib/ai/prompts/{compress,auto-tag,generate-cloze,generate-open,validate-open}.ts` — PL with EN tech terms
 - [x] `app/api/dev/smoke-ai/route.ts` — verified usage_logs row written end-to-end
 
-### Phase 4 — Material import + processing pipeline
-- [ ] P1: `app/(app)/materials/import/page.tsx`
-- [ ] P1: `app/api/materials/import/route.ts`
-- [ ] P1: `lib/processing/pipeline.ts` (9-step processMaterial)
-- [ ] P1: `app/(app)/materials/page.tsx` (list view)
-- [ ] P1: `app/(app)/materials/[id]/page.tsx` (detail view)
+### Phase 4 — Material import + processing pipeline (DONE)
+- [x] `lib/processing/parse.ts` (DOCX/MD/TXT/paste, validation)
+- [x] `lib/processing/compress-and-tag.ts` (Haiku)
+- [x] `lib/processing/generate-items.ts` (Haiku, Zod-validated cloze + open)
+- [x] `lib/processing/pipeline.ts` (9-step orchestrator, trackAICall on every step)
+- [x] `app/api/materials/import/route.ts` (multipart, fire-and-forget pipeline)
+- [x] `app/api/jobs/[id]/route.ts` (status polling)
+- [x] `app/(app)/materials/import/page.tsx` (form + progress bar)
+- [x] `app/(app)/materials/page.tsx` (list view)
+- [x] `app/(app)/materials/[id]/page.tsx` (detail view)
+- [x] `lib/db/types.ts` (hand-maintained TS types matching schema)
+- [x] `app/(app)/layout.tsx` shared nav + `app/layout.tsx` Sonner Toaster + login/import toasts
+- [ ] P3: replace mock embedding with real Voyage call once API key is provided (TODO(voyage) in pipeline.ts)
 
 ### Phase 5 — Review session (cloze + FSRS)
 - [ ] P1: `lib/fsrs/scheduler.ts`
