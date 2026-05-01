@@ -2,9 +2,20 @@
 
 ## Current State
 
-**Phases 1-4 DONE.** **Phase 5 (Review session — cloze + FSRS) — NEXT.**
+**M1 (Core Loop) — DONE.** All 7 phases shipped. Ready for M1 verification pass + M2 planning.
 
-Full import pipeline runs end-to-end (parse → compress → tag → generate cloze + open → schedule audits → mark ready). User tested with real material, all 4 AI ops logged in usage_logs, items materialized in DB. Embeddings still mocked (Voyage key pending). Shared `(app)` layout with top nav and Sonner toasts in place.
+Full loop tested end-to-end:
+- Magic Link login → Supabase session
+- Import (DOCX/MD/TXT/paste) → pipeline (compress, tag, generate cloze + open) → 10–20 fiszek + 5–8 pytań w bazie
+- Review session: cloze with FSRS rating (Again/Hard/Good/Easy, 1-4 keys), optimistic UI
+- Deep Dive: Sonnet validates open answers per category, 3-button calibration, all persisted
+- Costs dashboard: today/month/projection + breakdown per op + per model + soft/hard limit banners
+- Nav (Dashboard / Materiały / Review / Deep Dive / Koszty / Wyloguj) on every protected page
+- Toasts on all key actions
+
+Total spend in M1 testing so far: ~\$0.04. Soft limit \$5 nowhere near.
+
+**Outstanding for full M1**: Voyage embeddings still mocked — pipeline accepts a deterministic stub vector (TODO(voyage) in lib/processing/pipeline.ts). When the user provides VOYAGE_API_KEY, swap in the real embed() call. Otherwise nothing in M1 *blocks* on this — dedup (currently skipped) and semantic search (M2 only) are the consumers.
 
 ### Files modified / created so far
 - `package.json` — Next 16.2.4, React 19.2, all CLAUDE.md core deps installed
@@ -69,22 +80,45 @@ Full import pipeline runs end-to-end (parse → compress → tag → generate cl
 - [x] `app/(app)/layout.tsx` shared nav + `app/layout.tsx` Sonner Toaster + login/import toasts
 - [ ] P3: replace mock embedding with real Voyage call once API key is provided (TODO(voyage) in pipeline.ts)
 
-### Phase 5 — Review session (cloze + FSRS)
-- [ ] P1: `lib/fsrs/scheduler.ts`
-- [ ] P1: `app/api/sessions/start/route.ts`
-- [ ] P1: `app/api/sessions/[id]/answer/route.ts`
-- [ ] P1: `app/(app)/sessions/review/page.tsx`
+### Phase 5 — Review session (cloze + FSRS) (DONE)
+- [x] `lib/fsrs/scheduler.ts` (ts-fsrs wrap with project config + leech rule)
+- [x] `app/api/sessions/start/route.ts` (review + deep_dive modes, new-card daily cap)
+- [x] `app/api/sessions/[id]/answer/route.ts` (cloze branch with FSRS update)
+- [x] `app/api/sessions/[id]/end/route.ts`
+- [x] `app/(app)/sessions/review/page.tsx` (optimistic UI, keyboard shortcuts)
+- [x] `app/api/dev/backfill-fsrs/route.ts` (one-time helper)
 
-### Phase 6 — Deep Dive session (open + AI validation)
-- [ ] P1: `lib/ai/prompts/validate-open.ts`
-- [ ] P1: Deep Dive UI + answer endpoint with Sonnet validation
-- [ ] P1: `app/api/sessions/[id]/calibrate/route.ts`
+### Phase 6 — Deep Dive session (open + AI validation) (DONE)
+- [x] `lib/ai/validate-open.ts` (Sonnet wrapper + Zod schema)
+- [x] `app/api/sessions/[id]/answer/route.ts` extended with open branch (Sonnet validation through trackAICall)
+- [x] `app/api/sessions/[id]/calibrate/route.ts`
+- [x] `app/(app)/sessions/deep-dive/page.tsx` (material selector)
+- [x] `app/(app)/sessions/deep-dive/[material_id]/page.tsx` (Q → answer → AI feedback → calibration → next)
+- [x] Calibration buttons show selected state (ring + check)
 
-### Phase 7 — Cost dashboard + main dashboard
-- [ ] P1: `app/(app)/costs/page.tsx`
-- [ ] P1: `app/(app)/dashboard/page.tsx` (basic tiles)
-- [ ] P2: Theme toggle + auto-switch after 19:00
-- [ ] P1: M1 final smoke test (full loop)
+### Phase 7 — Cost dashboard + main dashboard (DONE)
+- [x] `app/(app)/costs/page.tsx` (today / month / projection + breakdowns + recent calls + soft/hard banners)
+- [x] `app/(app)/dashboard/page.tsx` rewritten with tiles (due cards highlighted, materials, items, month cost)
+- [x] Nav 'Koszty' link
+- [ ] P3 (deferred to M3): Theme toggle + auto-switch after 19:00 — currently dark-mode only via root `<html class="dark">`
+- [x] Final M1 smoke verified end-to-end through real session
+
+## M2 candidates (next)
+
+When user is ready for M2 planning, top items per CLAUDE.md:
+- Replace mock Voyage embedding with real call (unblocks dedup + semantic search)
+- Topic audits execution (we already schedule day_7/30/90 rows, just need executor)
+- Leech rotation queue (we set is_leech, need to actually surface them)
+- Knowledge gap detection (weekly cron + on-demand)
+- Prompt generation for Claude.ai with copy button
+- Loop closure on import (similarity-match against open gaps)
+- 3-tier search (quick / semantic / filtered)
+- Calibration offsets aggregation (we collect data, need rollup + bias correction)
+- Dispute with AI (5-turn limit)
+- Item editing with version history
+- Bulk import + URL import
+- Feynman + scenario formats
+- JSON export
 
 ## Out of scope for M1 (deferred to M2/M3)
 

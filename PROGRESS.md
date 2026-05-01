@@ -4,6 +4,57 @@ Session handoff log. Most recent entry on top. Keep this file under 200 lines.
 
 ---
 
+## 2026-05-01 — M1 COMPLETE (Phases 5, 6, 7 shipped)
+
+### Phase 5 — Review session
+- `lib/fsrs/scheduler.ts`: ts-fsrs wrap. `applyRating(itemState, rating, now)` returns next FSRS state to write back + leech detection (lapses ≥ 4 after 10+ reviews). `initialFsrsState()` puts new items in queue immediately (`fsrs_due_date = now`).
+- `pipeline.ts` updated: cloze items spread `initialFsrsState()` at insert time so freshly-imported materials surface in next review session.
+- `POST /api/sessions/start`: `mode: 'review'` returns due cloze items capped per CLAUDE.md (max 25 new cards/day). `mode: 'deep_dive'` returns open items for given material_id. Pre-loads everything (M3 offline contract).
+- `POST /api/sessions/[id]/answer`: cloze branch updates FSRS state via applyRating + writes `reviews` row.
+- `POST /api/sessions/[id]/end`: marks ended, recomputes items_completed.
+- `/sessions/review`: cloze flashcard UI. Cloze text blanked on front (`______`), revealed on space/click, 4 rating buttons (Again/Hard/Good/Easy, keys 1-4). **Optimistic UI** — UI advances immediately on click, persistence fires in background, eliminating per-card lag user reported.
+- `/api/dev/backfill-fsrs`: one-shot helper for items created before Phase 5 (sets `fsrs_due_date = now()` where null). User ran it once on 20 pre-existing cloze items.
+
+### Phase 6 — Deep Dive
+- `lib/ai/validate-open.ts`: Sonnet wrapper with `buildValidateOpenSystemPrompt(category)` (per-category persona) + Zod schema `{ evaluation, feedback_positive, feedback_negative }`. Cached system prompt.
+- `POST /api/sessions/[id]/answer` open branch: validates user answer through trackAICall (operation: validate_open_answer). Persists `ai_evaluation`, both feedback fields, `validated_at`.
+- `POST /api/sessions/[id]/calibrate`: stores `user_calibration` ('agree' / 'too_strict' / 'too_lenient') on the review row.
+- `/sessions/deep-dive`: material selector showing only materials with at least one open question, plus per-material count.
+- `/sessions/deep-dive/[material_id]`: question → textarea → Sonnet validates → feedback card (color-coded eval header + plusy/minusy with colored borders + collapsible "twoja odpowiedź / wzorzec") → 3-button calibration (selected state with emerald ring + checkmark) → "Następne pytanie".
+- Material detail view now shows "Zacznij Deep Dive →" CTA.
+
+### Phase 7 — Costs + dashboard polish
+- `/costs`: 3 top tiles (today / month / month-end projection from daily run rate), 2 breakdown cards (per operation + per model with proportional bars), recent-calls table (10 newest with input/cache/output token counts and per-call cost), soft/hard limit banners that surface only when crossed.
+- `/dashboard` rewritten: 4 tiles (due cards — highlighted with emerald border when > 0, materials, items, month cost), 4 CTAs (Review primary, Deep Dive, +New material, Materials).
+- Nav: 'Koszty' added.
+
+### Verification (full M1 loop tested by user)
+| Step | Result |
+|---|---|
+| Magic Link login → /dashboard | works (Phase 2) |
+| Import DOCX-style material via paste | works, ~30s, 4 AI ops (compress, auto-tag, generate-cloze, generate-open) |
+| Material detail view | shows compressed content, tags, ~14 cloze + ~7 open |
+| Review session: 5 cloze rated (4 Hard + 1 Good) | FSRS produced different stability/difficulty per rating, all persisted |
+| Deep Dive: 3 open answers (correct + 2 incorrect) | Sonnet evaluations correct, calibration saved (correct+too_strict, incorrect+agree×2) |
+| Cost tracking | usage_logs has 4-op-import + 3-call-deep-dive + smoke tests, total \$0.04 month-to-date |
+| Costs page | renders breakdowns, projection, recent calls table |
+
+### Lessons learned
+- shadcn buttons need explicit `ring-2` class to show selected state — default `variant="default"` only changes background, not enough visual feedback. Captured in deep-dive page calibration buttons.
+- New cloze items must have `fsrs_due_date = now()` to appear in review queue. Schema allows null (open questions don't use FSRS) but cloze inserts must set it explicitly. Initially missed → 0 due cards even after import. Fixed by spreading `initialFsrsState()` in pipeline.ts. Backfill endpoint provided for items created before the fix.
+- Optimistic UI eliminates the per-card "lag" feel of waiting for FSRS+review insert (~500ms on localhost). Pattern: advance UI immediately, persist in background `void (async () => ...)()`, surface failures via toast (item stays in queue for next session).
+
+### Next session pickup
+**M1 is complete.** Suggest fresh session for M2 planning. Next agent reads:
+1. CLAUDE.md (full project source-of-truth)
+2. tasks/todo.md (M2 candidates list at bottom)
+3. tasks/lessons.md (everything learned so far)
+4. This PROGRESS.md (what shipped and how)
+
+Key M2 pickup task: replace mock Voyage embedding with real call once user provides VOYAGE_API_KEY. Marked TODO(voyage) in lib/processing/pipeline.ts.
+
+---
+
 ## 2026-05-01 — Phase 4 Material import + processing pipeline (DONE)
 
 ### Completed
