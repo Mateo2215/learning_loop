@@ -12,6 +12,9 @@ Project-specific gotchas. For universal patterns see `../../global-lessons.md`.
 - **Next.js 16 renamed `middleware.ts` → `proxy.ts`** (and the exported function from `middleware()` → `proxy()`). The matcher config and request handling stay identical. The dev server logs a deprecation warning but still runs the old file. Codemod available: `npx @next/codemod@canary middleware-to-proxy .`. Affects only the root convention file — internal helpers like `lib/supabase/middleware.ts` keep their names.
 - **Killing background dev servers on Windows requires `taskkill //PID <pid> //F`** — `pkill` and `kill %1` from bash do not actually terminate the Node process holding the port. Always check `netstat -ano | findstr :3000` to confirm port is free before restarting.
 - **Dev server can die silently after long sessions** (HMR + many file edits + auth redirect loops). Symptom: `ERR_CONNECTION_REFUSED` in browser. Fix: `netstat -ano | findstr :3000` to confirm dead, then `npm run dev` again. Not an app problem — a dev-mode quirk on Windows.
+- **`npm run build` catches things `npm run dev` ignores.** Always run a production build before declaring a phase done. Two things bit us at M1 close:
+  - **`useSearchParams()` must be inside `<Suspense>`** for any page that gets statically prerendered. Dev mode renders everything client-side so it never complains, but `next build` refuses to prerender. Pattern: extract the hook-using subtree into a small inner component, wrap it in `<Suspense fallback={...}>`. Hit this on `/login` and `/auth/finish`.
+  - **React 19's `react-hooks/purity` rule** disallows impure calls (`Date.now()`, `Math.random()`, `new Date()`) as initial values in `useState`. ESLint catches this — `npm run build` runs lint as a hard gate. Workaround: use a placeholder initial value (0, null) and set the real one in the matching `useEffect` that runs once on mount.
 
 ## Security (env / secrets)
 

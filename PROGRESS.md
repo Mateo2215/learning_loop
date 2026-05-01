@@ -43,6 +43,7 @@ Session handoff log. Most recent entry on top. Keep this file under 200 lines.
 - shadcn buttons need explicit `ring-2` class to show selected state — default `variant="default"` only changes background, not enough visual feedback. Captured in deep-dive page calibration buttons.
 - New cloze items must have `fsrs_due_date = now()` to appear in review queue. Schema allows null (open questions don't use FSRS) but cloze inserts must set it explicitly. Initially missed → 0 due cards even after import. Fixed by spreading `initialFsrsState()` in pipeline.ts. Backfill endpoint provided for items created before the fix.
 - Optimistic UI eliminates the per-card "lag" feel of waiting for FSRS+review insert (~500ms on localhost). Pattern: advance UI immediately, persist in background `void (async () => ...)()`, surface failures via toast (item stays in queue for next session).
+- **Always `npm run build` before declaring a phase done.** Caught two issues at M1 close that dev mode ignored: (1) `useSearchParams` needs `<Suspense>` for static prerendering, (2) React 19's `react-hooks/purity` rule rejects `Date.now()` in `useState` initial value. Both fixed by extracting hook-using subtrees and using placeholder initial values. Lesson captured in tasks/lessons.md.
 
 ### Next session pickup
 **M1 is complete.** Suggest fresh session for M2 planning. Next agent reads:
