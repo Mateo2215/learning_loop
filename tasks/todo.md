@@ -2,9 +2,9 @@
 
 ## Current State
 
-**Phase 1 (Bootstrap) — DONE.** **Phase 2 (DB + Auth) — DONE.** **Phase 3 (AI layer + cost tracking) — NEXT.**
+**Phase 1 (Bootstrap) — DONE.** **Phase 2 (DB + Auth) — DONE.** **Phase 3 (AI layer + cost tracking) — DONE.** **Phase 4 (Material import + processing pipeline) — NEXT.**
 
-Magic Link auth verified end-to-end. Schema deployed to Supabase. Dashboard renders authenticated user. Ready for AI layer.
+trackAICall verified end-to-end: Haiku call → usage_logs row with token counts and \$0.000101 cost. Cost limits and prompt caching infrastructure ready. Voyage key still pending — pipeline embed step (Phase 4 step 3) will block until user provides one.
 
 ### Files modified / created so far
 - `package.json` — Next 16.2.4, React 19.2, all CLAUDE.md core deps installed
@@ -46,13 +46,14 @@ Magic Link auth verified end-to-end. Schema deployed to Supabase. Dashboard rend
 - [x] Magic Link end-to-end verified — login → /dashboard renders user email
 - [ ] P2: `npx supabase gen types typescript` → `lib/db/database.types.ts` (deferred to Phase 3 when we start querying tables from code)
 
-### Phase 3 — AI layer + cost tracking
-- [ ] P1: `lib/ai/pricing.ts`, `lib/ai/operations.ts`
-- [ ] P1: `lib/ai/track.ts` (`trackAICall` wrapper)
-- [ ] P1: `lib/ai/limits.ts` (soft/hard/per-call limits)
-- [ ] P1: `lib/ai/anthropic.ts`, `lib/ai/voyage.ts` (clients)
-- [ ] P1: `lib/ai/prompts/*.ts` (system prompts as constants)
-- [ ] P2: `tools/smoke-ai.ts` (smoke test with usage_logs assertion)
+### Phase 3 — AI layer + cost tracking (DONE)
+- [x] `lib/ai/pricing.ts`, `lib/ai/operations.ts`, `lib/ai/errors.ts`
+- [x] `lib/ai/track.ts` (`trackAICall` wrapper, mandatory entry point)
+- [x] `lib/ai/limits.ts` (\$5 soft / \$8 hard / \$0.50 per call, isNonCritical gating)
+- [x] `lib/ai/anthropic.ts` (cache_control ephemeral on system prompts)
+- [x] `lib/ai/voyage.ts` (voyage-3, 1024 dims)
+- [x] `lib/ai/prompts/{compress,auto-tag,generate-cloze,generate-open,validate-open}.ts` — PL with EN tech terms
+- [x] `app/api/dev/smoke-ai/route.ts` — verified usage_logs row written end-to-end
 
 ### Phase 4 — Material import + processing pipeline
 - [ ] P1: `app/(app)/materials/import/page.tsx`

@@ -4,6 +4,41 @@ Session handoff log. Most recent entry on top. Keep this file under 200 lines.
 
 ---
 
+## 2026-05-01 — Phase 3 AI layer + cost tracking (DONE)
+
+### Completed
+- `lib/ai/pricing.ts`: PRICING constants per-1M-tokens for Haiku 4.5, Sonnet 4.6, Voyage-3. `calculateCost()` accounts for cache reads (10x cheaper) and cache writes (1.25x normal). `COST_LIMITS` exposed: \$5 soft / \$8 hard / \$0.50 per-call.
+- `lib/ai/operations.ts`: `OperationType` enum (compress, auto-tag, generate-cloze/open/feynman/scenario, validate-open/feynman/scenario, embed, detect-gaps, generate-claude-prompt, smoke-test, etc.). `isNonCritical()` whitelist used by limit gating.
+- `lib/ai/errors.ts`: `CostLimitExceededError`, `AIProviderError`.
+- `lib/ai/limits.ts`: `getMonthlyUsage`, `enforceMonthlyLimit` (pre-flight gate), `assertPerCallLimit` (post-flight).
+- `lib/ai/track.ts`: **`trackAICall()` — only allowed entry point for AI calls.** Pre-flight: limit check. On success: insert row to `usage_logs` (tokens, cost, metadata, durationMs). On error: still insert log row with error in metadata, then re-throw. Per-call cap throws if a single call exceeded \$0.50.
+- `lib/ai/anthropic.ts`: thin wrapper around `messages.create` with `cache_control: { type: "ephemeral" }` support. `ANTHROPIC_MODEL_IDS` maps short IDs to actual API strings.
+- `lib/ai/voyage.ts`: `embed()` for voyage-3 single-input embeddings. Errors out clearly if `VOYAGE_API_KEY` missing.
+- `lib/ai/prompts/`: 5 system prompts (compress, auto-tag, generate-cloze, generate-open, validate-open). All in Polish with English technical terms preserved. `validate-open.ts` exports `buildValidateOpenSystemPrompt(category)` with per-category persona.
+- `app/api/dev/smoke-ai/route.ts`: dev-only auth-gated GET endpoint that calls Haiku once via trackAICall. Disabled in production via NODE_ENV check.
+
+### Verification
+- TS strict compiles with zero errors after small fix to Voyage SDK types (`response.usage?.totalTokens`, not `response.totalTokens`).
+- Smoke test ran twice successfully. Both calls:
+  - Reply: "Pong, 101." (Haiku correctly produced a prime > 100)
+  - input_tokens: 51, output_tokens: 10, cached_input_tokens: 0
+  - cost_usd: \$0.000101 (matches calculateCost() math: 51 \* \$1/M + 10 \* \$5/M)
+  - Two rows visible in `usage_logs` ordered by created_at desc.
+
+### Lessons learned
+- Migration was applied to a different Supabase project than the one in `.env.local`. First smoke call returned `ok: true` but the insert silently failed (track.ts logs to console.error rather than throwing on log failure — by design, so a logger problem doesn't break user-facing code). Diagnosis: SQL Editor in correct project showed `relation "public.usage_logs" does not exist`. Fix: re-apply migration in correct project. Lesson captured in tasks/lessons.md (verify project URL matches `.env.local` before assuming migration succeeded).
+- Dev server died silently after long auth-redirect-loop debugging session. Symptom: ERR_CONNECTION_REFUSED. Fix: `npm run dev` again. Captured in lessons.md.
+- Voyage SDK v0.2.1 uses nested `response.usage?.totalTokens`, not flat `response.totalTokens` like older docs suggest.
+
+### Next session pickup (Phase 4 — Material import + processing pipeline)
+1. `app/(app)/materials/import/page.tsx` — 4 tabs (DOCX/MD/TXT/paste) + category select.
+2. `app/api/materials/import/route.ts` — file upload, parse via `mammoth`, create processing_jobs row.
+3. `lib/processing/pipeline.ts` — sequential 9-step processMaterial(jobId): parse → embed (Voyage, BLOCKER until key) → dedup (cosine sim) → compress (Haiku) → auto-tag → generate-cloze (10-20) → generate-open (5-8) → schedule audits → mark ready.
+4. `app/(app)/materials/page.tsx` (list) + `app/(app)/materials/[id]/page.tsx` (detail).
+5. Voyage key needed before step 3 of pipeline can run end-to-end.
+
+---
+
 ## 2026-04-30 — Phase 2 DB + Auth (DONE)
 
 ### Completed
