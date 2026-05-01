@@ -2,7 +2,9 @@ import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { applyRating, type FsrsRating } from "@/lib/fsrs/scheduler";
-import type { Item } from "@/lib/db/types";
+import { trackAICall } from "@/lib/ai/track";
+import { validateOpenAnswer } from "@/lib/ai/validate-open";
+import type { Category, Item } from "@/lib/db/types";
 
 const AnswerBodySchema = z.object({
   item_id: z.string().uuid(),
@@ -50,15 +52,15 @@ export async function POST(
     .maybeSingle();
   if (!session) return NextResponse.json({ error: "session not found" }, { status: 404 });
 
-  // Pull item + FSRS state.
+  // Pull item + FSRS state. We also fetch question + reference + category for open-question validation.
   const { data: item } = await supabase
     .from("items")
-    .select("id, material_id, type, fsrs_stability, fsrs_difficulty, fsrs_due_date, fsrs_last_review, fsrs_review_count, fsrs_lapse_count")
+    .select("id, material_id, type, question, answer_reference, category, fsrs_stability, fsrs_difficulty, fsrs_due_date, fsrs_last_review, fsrs_review_count, fsrs_lapse_count")
     .eq("id", item_id)
     .maybeSingle();
   if (!item) return NextResponse.json({ error: "item not found" }, { status: 404 });
 
-  const itemTyped = item as Pick<Item, "id" | "material_id" | "type" | "fsrs_stability" | "fsrs_difficulty" | "fsrs_due_date" | "fsrs_last_review" | "fsrs_review_count" | "fsrs_lapse_count">;
+  const itemTyped = item as Pick<Item, "id" | "material_id" | "type" | "question" | "answer_reference" | "category" | "fsrs_stability" | "fsrs_difficulty" | "fsrs_due_date" | "fsrs_last_review" | "fsrs_review_count" | "fsrs_lapse_count">;
 
   if (itemTyped.type === "cloze") {
     if (!fsrs_rating) {
@@ -101,10 +103,40 @@ export async function POST(
     });
   }
 
-  // Open question — Phase 6 will validate via Sonnet. For now, persist the answer.
+  // Open question — validate via Sonnet, persist evaluation + feedback.
   if (itemTyped.type === "open") {
-    if (!user_answer) {
-      return NextResponse.json({ error: "user_answer required for open items" }, { status: 400 });
+    if (!user_answer || user_answer.trim().length < 3) {
+      return NextResponse.json(
+        { error: "user_answer too short (min 3 chars)" },
+        { status: 400 }
+      );
+    }
+    if (!itemTyped.answer_reference) {
+      return NextResponse.json({ error: "item missing answer_reference" }, { status: 500 });
+    }
+
+    let validation;
+    try {
+      const tracked = await trackAICall({
+        supabase,
+        userId: user.id,
+        operation: "validate_open_answer",
+        model: "claude-sonnet-4-6",
+        materialId: itemTyped.material_id,
+        sessionId,
+        metadata: { item_id, category: itemTyped.category },
+        call: () =>
+          validateOpenAnswer({
+            category: itemTyped.category as Category,
+            question: itemTyped.question,
+            referenceAnswer: itemTyped.answer_reference!,
+            userAnswer: user_answer.trim(),
+          }).then((r) => ({ result: r.result, usage: r.usage })),
+      });
+      validation = tracked.result;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "validation failed";
+      return NextResponse.json({ error: `AI validation failed: ${message}` }, { status: 500 });
     }
 
     const { data: review, error: reviewErr } = await supabase
@@ -114,17 +146,29 @@ export async function POST(
         item_id,
         material_id: itemTyped.material_id,
         session_id: sessionId,
-        user_answer,
+        user_answer: user_answer.trim(),
+        ai_evaluation: validation.evaluation,
+        ai_feedback_positive: validation.feedback_positive,
+        ai_feedback_negative: validation.feedback_negative,
         response_time_ms,
-        // ai_evaluation, feedback fields, validated_at — filled in Phase 6.
+        validated_at: new Date().toISOString(),
       })
       .select("id")
       .single();
+
     if (reviewErr || !review) {
-      return NextResponse.json({ error: `review insert failed: ${reviewErr?.message}` }, { status: 500 });
+      return NextResponse.json(
+        { error: `review insert failed: ${reviewErr?.message}` },
+        { status: 500 }
+      );
     }
 
-    return NextResponse.json({ review_id: review.id, validated: false });
+    return NextResponse.json({
+      review_id: review.id,
+      evaluation: validation.evaluation,
+      feedback_positive: validation.feedback_positive,
+      feedback_negative: validation.feedback_negative,
+    });
   }
 
   return NextResponse.json({ error: `unsupported item type: ${itemTyped.type}` }, { status: 400 });

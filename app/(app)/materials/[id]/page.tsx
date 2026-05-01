@@ -37,9 +37,12 @@ export default async function MaterialDetailPage({
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-8">
-      <div className="mb-4">
+      <div className="mb-4 flex items-center justify-between">
         <Button variant="ghost" size="sm" asChild>
           <Link href="/materials">← Wszystkie materiały</Link>
+        </Button>
+        <Button size="sm" asChild>
+          <Link href={`/sessions/deep-dive/${id}`}>Zacznij Deep Dive →</Link>
         </Button>
       </div>
 
