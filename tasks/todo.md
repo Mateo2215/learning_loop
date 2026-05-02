@@ -2,7 +2,7 @@
 
 ## Current State
 
-**M1 (Core Loop) — DONE.** **M2 Phases 2 (audits) + 3 (leech rotation) + 4 (gap detection) + 5 (Claude.ai prompt generation) — DONE.** Voyage AI key still blocked (user troubleshooting); M2 Phase 1 + 6 deferred until key lands.
+**M1 (Core Loop) — DONE.** **M2 Phases 2 + 3 + 4 + 5 + 8 — DONE.** Voyage AI key still blocked; Phases 1 + 6 + semantic search tier deferred.
 
 Full loop tested end-to-end:
 - Magic Link login → Supabase session
@@ -143,7 +143,12 @@ Total spend in M1 testing so far: ~\$0.04. Soft limit \$5 nowhere near.
 
 ### Phase 6 — Loop closure on import (BLOCKED on Voyage)
 ### Phase 7 — 3-tier search (semantic blocked on Voyage; quick + filtered can ship now)
-### Phase 8 — Calibration offsets aggregation
+### Phase 8 — Calibration offsets (DONE)
+- [x] `lib/calibration/aggregator.ts` (formula in [-1,+1], MIN_SAMPLE floor, idempotent upsert)
+- [x] `validate-open` system prompt accepts offset and adds lenient/strict hint when |offset| ≥ 0.2
+- [x] Answer route reads offset before each Sonnet call
+- [x] `/api/calibration/aggregate` (on-demand) + `/api/cron/calibration` (daily)
+- [x] `/settings` page with offsets table + recompute button + nav link
 ### Phase 9 — Item editing with version history + JSON export
 
 ## M3 / out of scope of current milestone

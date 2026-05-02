@@ -22,6 +22,8 @@ export interface ValidateOpenInput {
   question: string;
   referenceAnswer: string;
   userAnswer: string;
+  /** Optional calibration offset in [-1, +1]; 0 means neutral. */
+  calibrationOffset?: number;
 }
 
 export interface ValidateOpenResponse {
@@ -38,7 +40,7 @@ export async function validateOpenAnswer(input: ValidateOpenInput): Promise<Vali
 
   const out = await complete({
     model: "claude-sonnet-4-6",
-    systemPrompt: buildValidateOpenSystemPrompt(input.category),
+    systemPrompt: buildValidateOpenSystemPrompt(input.category, input.calibrationOffset ?? 0),
     userMessage,
     maxTokens: 600,
     temperature: 0.3,

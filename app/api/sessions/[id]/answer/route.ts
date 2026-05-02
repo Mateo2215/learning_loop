@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { applyRating, type FsrsRating } from "@/lib/fsrs/scheduler";
 import { trackAICall } from "@/lib/ai/track";
 import { validateOpenAnswer } from "@/lib/ai/validate-open";
+import { getCalibrationOffset } from "@/lib/calibration/aggregator";
 import type { Category, Item } from "@/lib/db/types";
 
 const AnswerBodySchema = z.object({
@@ -115,6 +116,12 @@ export async function POST(
       return NextResponse.json({ error: "item missing answer_reference" }, { status: 500 });
     }
 
+    const calibrationOffset = await getCalibrationOffset(
+      supabase,
+      user.id,
+      itemTyped.category as Category
+    );
+
     let validation;
     try {
       const tracked = await trackAICall({
@@ -124,13 +131,14 @@ export async function POST(
         model: "claude-sonnet-4-6",
         materialId: itemTyped.material_id,
         sessionId,
-        metadata: { item_id, category: itemTyped.category },
+        metadata: { item_id, category: itemTyped.category, calibration_offset: calibrationOffset },
         call: () =>
           validateOpenAnswer({
             category: itemTyped.category as Category,
             question: itemTyped.question,
             referenceAnswer: itemTyped.answer_reference!,
             userAnswer: user_answer.trim(),
+            calibrationOffset,
           }).then((r) => ({ result: r.result, usage: r.usage })),
       });
       validation = tracked.result;

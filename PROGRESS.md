@@ -4,6 +4,19 @@ Session handoff log. Most recent entry on top. Keep this file under 200 lines.
 
 ---
 
+## 2026-05-02 — M2 Phase 8: Calibration offsets (DONE)
+
+- `lib/calibration/aggregator.ts` — rolls up `reviews.user_calibration` per category into `calibration_offsets`. `current_offset = (lenient - strict) / max(total, MIN_SAMPLE)` capped to [-1,+1]. MIN_SAMPLE = 10 prevents one early data point swinging offset to ±1. `getCalibrationOffset()` returns 0 below 3 calibrations (sample too small).
+- `lib/ai/prompts/validate-open.ts` — `buildValidateOpenSystemPrompt(category, offset)` now appends a calibration hint when |offset| ≥ 0.2 (be more lenient / be stricter).
+- `app/api/sessions/[id]/answer/route.ts` — pulls offset before each Sonnet validation and passes it through `validateOpenAnswer`. Logged in usage_logs metadata for traceability.
+- `app/api/calibration/aggregate/route.ts` — on-demand recompute. `app/api/cron/calibration/route.ts` — daily cron with pg_cron snippet inside.
+- `app/(app)/settings/page.tsx` + `calibration-client.tsx` — table per category showing strict/lenient counts, total, offset, plain-Polish status (Skalibrowane / AI za surowe → łagodniej / itd.). Nav has 'Ustawienia'.
+- No new migration (`calibration_offsets` table existed since 0001). Build green (27 routes), tsc clean.
+
+The feedback loop closes itself now: user clicks "Za surowo" three times in finance → cron rolls it up → next finance Deep Dive Sonnet sees `offset = -0.3` and softens its rubric. The hint is added to the cached system prompt with the offset baked in — caching still works because each (category, offset-bucket) gets its own cache key.
+
+---
+
 ## 2026-05-02 — M2 Phase 5: Claude.ai prompt generation (DONE)
 
 - `lib/ai/prompts/generate-claude-prompt.ts` Sonnet system prompt — produces a ready-to-paste prompt matching CLAUDE.md template (3000-word PL/EN-tech report request, .docx output).

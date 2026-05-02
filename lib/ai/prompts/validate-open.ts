@@ -15,10 +15,32 @@ const PERSONA_BY_CATEGORY: Record<Category, string> = {
   ogolne: "doświadczonego nauczyciela",
 };
 
-export function buildValidateOpenSystemPrompt(category: Category): string {
-  const persona = PERSONA_BY_CATEGORY[category];
+/**
+ * Calibration offset is in [-1, +1]:
+ *   negative → AI was historically too strict per user feedback → be more lenient
+ *   positive → AI was historically too lenient → be slightly stricter
+ *   ~0       → no signal, behave normally
+ *
+ * Threshold ±0.2 — below that we don't bother adding a hint (noise).
+ */
+function calibrationHint(offset: number): string {
+  if (offset <= -0.2) {
+    return `\nUWAGA: użytkownik wcześniej wielokrotnie sygnalizował, że Twoje oceny w tej kategorii są zbyt surowe. Bądź odrobinę bardziej wyrozumiały — jeśli odpowiedź łapie sedno, ale brakuje pojedynczego detalu, oceń "partially_correct" zamiast "incorrect", a "correct" zamiast "partially_correct".`;
+  }
+  if (offset >= 0.2) {
+    return `\nUWAGA: użytkownik wcześniej sygnalizował, że Twoje oceny w tej kategorii są zbyt pobłażliwe. Bądź odrobinę bardziej wymagający — bez kluczowego terminu lub mechanizmu nie dawaj "correct"; przy braku zrozumienia mechanizmu oceniaj "incorrect" a nie "partially_correct".`;
+  }
+  return "";
+}
 
-  return `Jesteś ${persona} oceniającym odpowiedź uczącego się.
+export function buildValidateOpenSystemPrompt(
+  category: Category,
+  calibrationOffset: number = 0
+): string {
+  const persona = PERSONA_BY_CATEGORY[category];
+  const hint = calibrationHint(calibrationOffset);
+
+  return `Jesteś ${persona} oceniającym odpowiedź uczącego się.${hint}
 
 Otrzymujesz:
 - pytanie zadane uczącemu się
