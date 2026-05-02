@@ -4,6 +4,17 @@ Session handoff log. Most recent entry on top. Keep this file under 200 lines.
 
 ---
 
+## 2026-05-02 — M2 Phase 3: Leech rotation queue (DONE)
+
+- `lib/db/leeches.ts` — `getLastLeechExposureAt`, `isLeechRotationDue` (≥7d since last leech review AND user has at least one leech), `pickLeechCandidates` (sorted by fsrs_due_date asc).
+- `selectReviewItems` in `app/api/sessions/start/route.ts` now prepends up to 2 leeches at the front of the queue when rotation is due. Dedupes against items already in the queue.
+- `is_leech` flows through API → client; subtle amber badge surfaces on the cloze in `/sessions/review` (with title attr explaining why).
+- Build green (20 routes), tsc clean.
+
+Verification still requires a leech in the DB (an item with `is_leech=true`). User can flip one manually via SQL Editor for testing: `update items set is_leech = true where id = '...';` — leech badge will appear next session.
+
+---
+
 ## 2026-05-02 — M2 Phase 2: Topic audits execution (DONE)
 
 ### Context

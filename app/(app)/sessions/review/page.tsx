@@ -15,6 +15,7 @@ interface ReviewItem {
   cloze_data: { front: string; answer: string } | null;
   difficulty: "easy" | "medium" | "hard" | null;
   fsrs_review_count: number;
+  is_leech: boolean;
 }
 
 interface SessionStartResponse {
@@ -197,7 +198,17 @@ export default function ReviewSessionPage() {
     <div className="max-w-2xl mx-auto px-4 py-8">
       <div className="flex items-center justify-between mb-4 text-xs text-zinc-500 dark:text-zinc-400">
         <span>{index + 1} / {items.length}</span>
-        <span>{current.fsrs_review_count === 0 ? "Nowa fiszka" : `Powtórka #${current.fsrs_review_count + 1}`}</span>
+        <span className="flex items-center gap-2">
+          {current.is_leech && (
+            <span
+              className="px-1.5 py-0.5 rounded text-[10px] uppercase tracking-wide bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
+              title="Fiszka, której nie zapamiętujesz — wraca w rotacji co 7 dni."
+            >
+              leech
+            </span>
+          )}
+          <span>{current.fsrs_review_count === 0 ? "Nowa fiszka" : `Powtórka #${current.fsrs_review_count + 1}`}</span>
+        </span>
       </div>
 
       <Card className="mb-6">

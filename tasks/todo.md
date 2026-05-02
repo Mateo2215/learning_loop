@@ -2,7 +2,7 @@
 
 ## Current State
 
-**M1 (Core Loop) — DONE.** **M2 Phase 2 (Topic audits execution) — DONE.** Voyage AI key still blocked (user troubleshooting); M2 Phase 1 deferred until key lands.
+**M1 (Core Loop) — DONE.** **M2 Phases 2 (audits) + 3 (leech rotation) — DONE.** Voyage AI key still blocked (user troubleshooting); M2 Phase 1 deferred until key lands.
 
 Full loop tested end-to-end:
 - Magic Link login → Supabase session
@@ -123,9 +123,10 @@ Total spend in M1 testing so far: ~\$0.04. Soft limit \$5 nowhere near.
 - [x] Dashboard 5-tile grid with `audyty due` highlighted + conditional CTA
 - [x] Nav 'Audyty' link
 
-### Phase 3 — Leech rotation queue (next)
-- [ ] In `selectReviewItems`, force 1–2 leeches into the queue if `last_leech_session_at < now() - 7d`
-- [ ] Subtle "leech" badge on the cloze flashcard
+### Phase 3 — Leech rotation queue (DONE)
+- [x] `lib/db/leeches.ts`: `isLeechRotationDue` (≥7d gap), `pickLeechCandidates`
+- [x] `selectReviewItems` prepends up to 2 leeches when rotation is due
+- [x] Amber "leech" badge with tooltip in `/sessions/review`
 
 ### Phase 4 — Knowledge gap detection (next)
 - [ ] `lib/gaps/detector.ts` — 4 gap types (low_correct_rate, stale_topic, rising_failures, never_consolidated)
