@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { CATEGORY_LABELS, type Item, type Material } from "@/lib/db/types";
+import { ItemListClient, type EditableItem } from "./item-list-client";
 
 export default async function MaterialDetailPage({
   params,
@@ -26,14 +27,15 @@ export default async function MaterialDetailPage({
 
   const { data: items } = await supabase
     .from("items")
-    .select("id, type, question, answer_reference, difficulty")
+    .select("id, type, question, answer_reference, difficulty, edit_count")
     .eq("material_id", id)
+    .is("audit_id", null)
     .order("created_at", { ascending: true });
 
   const m = material as Material;
-  const itemList = (items ?? []) as Pick<Item, "id" | "type" | "question" | "answer_reference" | "difficulty">[];
-  const clozeItems = itemList.filter((i) => i.type === "cloze");
-  const openItems = itemList.filter((i) => i.type === "open");
+  const itemList = (items ?? []) as Pick<Item, "id" | "type" | "question" | "answer_reference" | "difficulty" | "edit_count">[];
+  const clozeItems: EditableItem[] = itemList.filter((i) => i.type === "cloze");
+  const openItems: EditableItem[] = itemList.filter((i) => i.type === "open");
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-8">
@@ -80,20 +82,7 @@ export default async function MaterialDetailPage({
             <CardDescription>Pytania typu cloze do sesji Review.</CardDescription>
           </CardHeader>
           <CardContent>
-            {clozeItems.length === 0 ? (
-              <p className="text-sm text-zinc-500">Brak fiszek.</p>
-            ) : (
-              <ul className="space-y-3">
-                {clozeItems.map((item) => (
-                  <li key={item.id} className="text-sm border-l-2 border-zinc-300 dark:border-zinc-700 pl-3">
-                    <div className="text-zinc-900 dark:text-zinc-100">{item.question}</div>
-                    {item.answer_reference && (
-                      <div className="text-xs text-zinc-500 mt-1">→ {item.answer_reference}</div>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            )}
+            <ItemListClient items={clozeItems} emptyLabel="Brak fiszek." />
           </CardContent>
         </Card>
 
@@ -103,24 +92,11 @@ export default async function MaterialDetailPage({
             <CardDescription>Pytania na sesje Deep Dive.</CardDescription>
           </CardHeader>
           <CardContent>
-            {openItems.length === 0 ? (
-              <p className="text-sm text-zinc-500">Brak pytań otwartych.</p>
-            ) : (
-              <ul className="space-y-4">
-                {openItems.map((item) => (
-                  <li key={item.id} className="text-sm border-l-2 border-zinc-300 dark:border-zinc-700 pl-3">
-                    <div className="font-medium text-zinc-900 dark:text-zinc-100">
-                      {item.question}
-                    </div>
-                    {item.answer_reference && (
-                      <div className="text-xs text-zinc-500 mt-1 italic">
-                        Wzorzec: {item.answer_reference}
-                      </div>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            )}
+            <ItemListClient
+              items={openItems}
+              emptyLabel="Brak pytań otwartych."
+              showReferenceLabel="Wzorzec"
+            />
           </CardContent>
         </Card>
     </div>

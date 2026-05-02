@@ -4,6 +4,19 @@ Session handoff log. Most recent entry on top. Keep this file under 200 lines.
 
 ---
 
+## 2026-05-02 — M2 Phase 9: Item editing + JSON export (DONE)
+
+- `PATCH /api/items/[id]` — edit `question` and/or `answer_reference`. First edit copies the current question into `original_question`; subsequent edits only bump `edit_count`. Audit-only items are immutable (their `audit_id` is set, route rejects).
+- `app/(app)/materials/[id]/item-list-client.tsx` — extracted client component. Hover-revealed "Edytuj" button per item; switches into a 2-textarea form with Save / Cancel; shows "edytowane Nx" badge for items with history.
+- `app/(app)/materials/[id]/page.tsx` — now filters audit-only items out of the per-material listing (they were already filtered in queue queries; this matches).
+- `GET /api/export/json` — full per-user dump: materials (without `embedding`), items, reviews, sessions, topic_audits, knowledge_gaps, calibration_offsets, usage_logs, material_relations. Strips `user_id` from every row. Sets `Content-Disposition: attachment; filename="learning-loop-export-YYYY-MM-DD.json"` so the browser downloads.
+- `app/(app)/settings/export-client.tsx` + section in `/settings` — single button "Pobierz jako JSON" (uses native `<a href download>`).
+- No new migration. Build green (29 routes), tsc clean.
+
+This wraps M2 work that's unblocked by Voyage. Remaining: Phase 1 (real embeddings + dedup), Phase 6 (loop closure on import), Phase 7 (3-tier search — quick + filtered are still implementable, semantic blocked).
+
+---
+
 ## 2026-05-02 — M2 Phase 8: Calibration offsets (DONE)
 
 - `lib/calibration/aggregator.ts` — rolls up `reviews.user_calibration` per category into `calibration_offsets`. `current_offset = (lenient - strict) / max(total, MIN_SAMPLE)` capped to [-1,+1]. MIN_SAMPLE = 10 prevents one early data point swinging offset to ±1. `getCalibrationOffset()` returns 0 below 3 calibrations (sample too small).

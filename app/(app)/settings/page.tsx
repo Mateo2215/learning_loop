@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { CalibrationSection } from "./calibration-client";
+import { ExportSection } from "./export-client";
 import { CATEGORY_LABELS, type Category } from "@/lib/db/types";
 
 interface OffsetRow {
@@ -34,7 +35,10 @@ export default async function SettingsPage() {
         Konto: <span className="font-mono">{user.email}</span>
       </p>
 
-      <CalibrationSection initialRows={rows} />
+      <div className="space-y-6">
+        <CalibrationSection initialRows={rows} />
+        <ExportSection />
+      </div>
     </div>
   );
 }

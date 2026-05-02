@@ -2,7 +2,7 @@
 
 ## Current State
 
-**M1 (Core Loop) — DONE.** **M2 Phases 2 + 3 + 4 + 5 + 8 — DONE.** Voyage AI key still blocked; Phases 1 + 6 + semantic search tier deferred.
+**M1 (Core Loop) — DONE.** **M2 Phases 2 + 3 + 4 + 5 + 8 + 9 — DONE.** Voyage AI key still blocked; Phases 1 + 6 + semantic search tier deferred. Phase 7 quick + filtered search remains the last unblocked work item before M3.
 
 Full loop tested end-to-end:
 - Magic Link login → Supabase session
@@ -149,7 +149,11 @@ Total spend in M1 testing so far: ~\$0.04. Soft limit \$5 nowhere near.
 - [x] Answer route reads offset before each Sonnet call
 - [x] `/api/calibration/aggregate` (on-demand) + `/api/cron/calibration` (daily)
 - [x] `/settings` page with offsets table + recompute button + nav link
-### Phase 9 — Item editing with version history + JSON export
+### Phase 9 — Item editing + JSON export (DONE)
+- [x] `PATCH /api/items/[id]` (preserves `original_question` on first edit, blocks audit items)
+- [x] Hover-reveal "Edytuj" button on `/materials/[id]` items + edit-count badge
+- [x] `GET /api/export/json` (full user dump, no embeddings, strips user_id)
+- [x] Export section in `/settings` with native download link
 
 ## M3 / out of scope of current milestone
 - Dispute with AI (5-turn limit)
