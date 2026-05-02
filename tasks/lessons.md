@@ -30,4 +30,10 @@ Project-specific gotchas. For universal patterns see `../../global-lessons.md`.
 
 ## AI cost / latency
 
-- (none yet — to fill during Phase 3+)
+- **Cron generation = wasted spend.** Don't pre-generate audit questions in the cron heartbeat. Sonnet audit generation costs ~$0.005–$0.02 each; pre-generating for every due audit pays even when the user never runs them. Pattern: cron only counts/surfaces due audits, generation happens lazily on the "Zacznij audyt" click via an idempotent `prepareAudit()`.
+
+## M2 audits
+
+- **Audit items need a separate scope.** Audit-generated questions live in `items` (so reviews can FK to them) but with `audit_id` set. Every other reader of `items` (review queue, deep-dive picker, dashboard counts) must filter `audit_id is null`. Easy to forget — would cause regular pools to mix audit questions in. Pattern: explicit `.is("audit_id", null)` on every non-audit query.
+- **pg_cron from migrations needs elevated perms.** Supabase SQL Editor with the standard user can't always create pg_cron jobs. Keep the `select cron.schedule(...)` block as a commented snippet **inside** the migration file for the user to paste manually as service_role, rather than relying on it applying automatically.
+- **Idempotent question generation.** `prepareAudit()` returns existing items if the audit was already prepared. Critical for browser-refresh-mid-flow: a user who reloads the audit page mustn't burn a second Sonnet call.

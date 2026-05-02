@@ -21,6 +21,7 @@ export default async function DashboardPage() {
     { count: materialsCount },
     { count: itemsCount },
     { count: dueCount },
+    { count: auditsDueCount },
     { data: monthCostRows },
   ] = await Promise.all([
     supabase.from("materials").select("id", { count: "exact", head: true }).is("deleted_at", null),
@@ -30,7 +31,13 @@ export default async function DashboardPage() {
       .select("id", { count: "exact", head: true })
       .eq("type", "cloze")
       .eq("is_suspended", false)
+      .is("audit_id", null)
       .lte("fsrs_due_date", nowIso),
+    supabase
+      .from("topic_audits")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "pending")
+      .lte("scheduled_for", nowIso),
     supabase
       .from("usage_logs")
       .select("cost_usd")
@@ -46,8 +53,9 @@ export default async function DashboardPage() {
     <div className="max-w-4xl mx-auto px-4 py-8">
       <h1 className="text-2xl font-semibold mb-6">Dashboard</h1>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 mb-6">
         <Tile value={dueCount ?? 0} label="due cards" emphasize={(dueCount ?? 0) > 0} />
+        <Tile value={auditsDueCount ?? 0} label="audyty due" emphasize={(auditsDueCount ?? 0) > 0} />
         <Tile value={materialsCount ?? 0} label="materiałów" />
         <Tile value={itemsCount ?? 0} label="pytań i fiszek" />
         <Tile value={formatUsd(monthCost)} label="koszt miesiąca" mono />
@@ -60,6 +68,11 @@ export default async function DashboardPage() {
         <Button variant="outline" asChild>
           <Link href="/sessions/deep-dive">Deep Dive</Link>
         </Button>
+        {(auditsDueCount ?? 0) > 0 && (
+          <Button variant="outline" asChild>
+            <Link href="/sessions/audit">Audyty ({auditsDueCount})</Link>
+          </Button>
+        )}
         <Button variant="outline" asChild>
           <Link href="/materials/import">+ Nowy materiał</Link>
         </Button>

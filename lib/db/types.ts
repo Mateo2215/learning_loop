@@ -79,6 +79,7 @@ export interface Item {
   fsrs_lapse_count: number;
   original_question: string | null;
   edit_count: number;
+  audit_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -115,6 +116,7 @@ export interface TopicAudit {
   id: string;
   user_id: string;
   material_id: string;
+  session_id: string | null;
   scheduled_for: string;
   trigger: AuditTrigger;
   status: AuditStatus;

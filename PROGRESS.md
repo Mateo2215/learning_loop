@@ -4,6 +4,37 @@ Session handoff log. Most recent entry on top. Keep this file under 200 lines.
 
 ---
 
+## 2026-05-02 — M2 Phase 2: Topic audits execution (DONE)
+
+### Context
+M2 started. Phase 1 (real Voyage embeddings + dedup) is **blocked** — user couldn't issue a key from the Voyage console; troubleshooting in parallel. Pipeline keeps stub vector. Plan: skip Phase 1 + Phase 6 (loop closure) + semantic-search tier for now; ship the rest.
+
+### Phase 2 (this session)
+- Migration `0002_audits.sql`: `topic_audits.session_id` FK + `items.audit_id` FK (audit items don't pollute regular Deep Dive / Review pools), pg_cron install snippet kept commented for user to paste in SQL Editor.
+- `lib/ai/prompts/generate-audit.ts` — Sonnet system prompt with per-category persona + per-trigger framing (day_7 = "anything left after a week", day_30 = "apply in new context", day_90 = "long-term retention", resurrection = "tempt user back").
+- `lib/ai/generate-audit.ts` — Sonnet 4.6 wrapper, Zod-validated 3–5 fresh open questions, system prompt cached.
+- `lib/audits/scheduler.ts` — `getDueAudits()` lists `pending` rows with `scheduled_for <= now()`; `prepareAudit()` is **idempotent** (re-uses items if already generated for the audit_id), pulls existing question texts so Sonnet avoids duplicates, persists items with `audit_id` set; `evaluationToScore()` maps correct/partial/incorrect → 1.0 / 0.5 / 0.
+- `app/api/sessions/start/route.ts` — new `mode: 'audit'` branch; review + deep_dive both filter `audit_id is null`.
+- `app/api/sessions/[id]/end/route.ts` — for audit sessions, computes mean evaluation score and flips audit to `completed` with `performance_score`.
+- `app/(app)/sessions/audit/page.tsx` (list) + `[audit_id]/page.tsx` (run flow). Open-question UI mirrors deep-dive but final screen shows the % score.
+- `app/api/cron/audits/route.ts` — Bearer-token heartbeat (does NOT pre-generate questions; generation stays lazy on click to avoid wasted spend if the user never runs the audit).
+- `app/api/dev/force-audit-due/[material_id]/route.ts` — test helper to bypass the 7-day wait.
+- Dashboard now shows `audyty due` tile with emerald border + conditional CTA when > 0; nav has 'Audyty' link.
+
+### Verification
+- `npx tsc --noEmit` clean.
+- `npm run lint` clean.
+- `npm run build` green (19/19 pages, includes new audit routes).
+- End-to-end manual test pending — user needs to apply migration `0002_audits.sql` in Supabase and (optionally) install the pg_cron job from the snippet inside the migration file.
+
+### Blockers
+- VOYAGE_API_KEY (M2 Phase 1, 6, partial 7).
+
+### Next session pickup
+Phase 3 (leech rotation) is small and unblocked — propose starting there. Then Phase 4 (gap detection) and Phase 5 (prompt generation) both unblocked.
+
+---
+
 ## 2026-05-01 — M1 COMPLETE (Phases 5, 6, 7 shipped)
 
 ### Phase 5 — Review session

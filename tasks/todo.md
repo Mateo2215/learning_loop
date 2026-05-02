@@ -2,7 +2,7 @@
 
 ## Current State
 
-**M1 (Core Loop) — DONE.** All 7 phases shipped. Ready for M1 verification pass + M2 planning.
+**M1 (Core Loop) — DONE.** **M2 Phase 2 (Topic audits execution) — DONE.** Voyage AI key still blocked (user troubleshooting); M2 Phase 1 deferred until key lands.
 
 Full loop tested end-to-end:
 - Magic Link login → Supabase session
@@ -103,22 +103,51 @@ Total spend in M1 testing so far: ~\$0.04. Soft limit \$5 nowhere near.
 - [ ] P3 (deferred to M3): Theme toggle + auto-switch after 19:00 — currently dark-mode only via root `<html class="dark">`
 - [x] Final M1 smoke verified end-to-end through real session
 
-## M2 candidates (next)
+## M2 — Smart Layer (in progress)
 
-When user is ready for M2 planning, top items per CLAUDE.md:
-- Replace mock Voyage embedding with real call (unblocks dedup + semantic search)
-- Topic audits execution (we already schedule day_7/30/90 rows, just need executor)
-- Leech rotation queue (we set is_leech, need to actually surface them)
-- Knowledge gap detection (weekly cron + on-demand)
-- Prompt generation for Claude.ai with copy button
-- Loop closure on import (similarity-match against open gaps)
-- 3-tier search (quick / semantic / filtered)
-- Calibration offsets aggregation (we collect data, need rollup + bias correction)
+### Phase 1 — Voyage embeddings + dedup (BLOCKED on VOYAGE_API_KEY)
+- User's Voyage console couldn't issue a key on first try; user is troubleshooting in parallel.
+- Pipeline still uses deterministic stub vector (TODO(voyage) in lib/processing/pipeline.ts).
+- Once key lands: replace stub with `embed()`, enable cosine dedup at step 4 (auto-merge >0.92, flag 0.85–0.92), backfill embeddings for existing materials, then unblock M2 Phase 6 (loop closure) and Phase 7 semantic search tier.
+
+### Phase 2 — Topic audits execution (DONE)
+- [x] Migration `0002_audits.sql`: `topic_audits.session_id`, `items.audit_id`, pg_cron install snippet for `audits-daily`
+- [x] `lib/ai/prompts/generate-audit.ts` (Sonnet, per-trigger framing day_7 / day_30 / day_90 / resurrection)
+- [x] `lib/ai/generate-audit.ts` Sonnet wrapper + Zod schema
+- [x] `lib/audits/scheduler.ts` (`getDueAudits`, `prepareAudit` idempotent, `evaluationToScore` helper)
+- [x] `app/api/sessions/start/route.ts` extended with `mode: 'audit'`; deep_dive + review now filter `audit_id is null` so audit items don't pollute regular pools
+- [x] `app/api/sessions/[id]/end/route.ts` computes `performance_score` (mean of correct=1 / partial=0.5 / incorrect=0) and flips audit row to `completed`
+- [x] `app/(app)/sessions/audit/page.tsx` (list of due audits) + `app/(app)/sessions/audit/[audit_id]/page.tsx` (run flow Q → AI feedback → next → final score)
+- [x] `app/api/cron/audits/route.ts` (Bearer-guarded heartbeat; returns due counts per user — does NOT pre-generate questions, generation stays lazy on-click to avoid wasted spend)
+- [x] `app/api/dev/force-audit-due/[material_id]/route.ts` (testing helper — sets day_7 audit to scheduled_for = now-1h)
+- [x] Dashboard 5-tile grid with `audyty due` highlighted + conditional CTA
+- [x] Nav 'Audyty' link
+
+### Phase 3 — Leech rotation queue (next)
+- [ ] In `selectReviewItems`, force 1–2 leeches into the queue if `last_leech_session_at < now() - 7d`
+- [ ] Subtle "leech" badge on the cloze flashcard
+
+### Phase 4 — Knowledge gap detection (next)
+- [ ] `lib/gaps/detector.ts` — 4 gap types (low_correct_rate, stale_topic, rising_failures, never_consolidated)
+- [ ] `lib/ai/prompts/detect-gaps.ts` Sonnet ranking
+- [ ] `app/api/gaps/detect/route.ts` (on-demand) + `app/api/cron/gaps/route.ts` (weekly)
+- [ ] `app/(app)/gaps/page.tsx`
+
+### Phase 5 — Prompt generation for Claude.ai
+- [ ] `lib/ai/prompts/generate-claude-prompt.ts`
+- [ ] `app/api/gaps/[id]/generate-prompt/route.ts`
+- [ ] `app/(app)/gaps/[id]/page.tsx` with Copy + Open Claude.ai
+
+### Phase 6 — Loop closure on import (BLOCKED on Voyage)
+### Phase 7 — 3-tier search (semantic blocked on Voyage; quick + filtered can ship now)
+### Phase 8 — Calibration offsets aggregation
+### Phase 9 — Item editing with version history + JSON export
+
+## M3 / out of scope of current milestone
 - Dispute with AI (5-turn limit)
-- Item editing with version history
 - Bulk import + URL import
-- Feynman + scenario formats
-- JSON export
+- Feynman + scenario formats fully implemented
+- Ghost mode, topic resurrection
 
 ## Out of scope for M1 (deferred to M2/M3)
 
