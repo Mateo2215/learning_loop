@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { CATEGORY_LABELS, type Item, type Material } from "@/lib/db/types";
 import { ItemListClient, type EditableItem } from "./item-list-client";
+import { GapLinkBanner } from "./gap-link-banner";
 
 export default async function MaterialDetailPage({
   params,
@@ -37,6 +38,16 @@ export default async function MaterialDetailPage({
   const clozeItems: EditableItem[] = itemList.filter((i) => i.type === "cloze");
   const openItems: EditableItem[] = itemList.filter((i) => i.type === "open");
 
+  let suggestedGap: { id: string; title: string | null } | null = null;
+  if (m.suggested_gap_id) {
+    const { data: g } = await supabase
+      .from("knowledge_gaps")
+      .select("id, title")
+      .eq("id", m.suggested_gap_id)
+      .maybeSingle();
+    if (g) suggestedGap = g as { id: string; title: string | null };
+  }
+
   return (
     <div className="max-w-3xl mx-auto px-4 py-8">
       <div className="mb-4 flex items-center justify-between">
@@ -47,6 +58,13 @@ export default async function MaterialDetailPage({
           <Link href={`/sessions/deep-dive/${id}`}>Zacznij Deep Dive →</Link>
         </Button>
       </div>
+
+      {suggestedGap && (
+        <GapLinkBanner
+          materialId={m.id}
+          gapTitle={suggestedGap.title ?? "Otwarta luka"}
+        />
+      )}
 
       <Card className="mb-6">
           <CardHeader>

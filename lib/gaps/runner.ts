@@ -12,6 +12,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { runAllDetectors } from "./detector";
 import { rankGapCandidates } from "@/lib/ai/detect-gaps";
 import { trackAICall } from "@/lib/ai/track";
+import { embed } from "@/lib/ai/voyage";
 
 export interface GapDetectionResult {
   candidatesFound: number;
@@ -65,6 +66,27 @@ export async function detectGapsForUser(
       continue;
     }
 
+    // Embed a textual representation of the gap so loop closure can later
+    // match it against newly imported materials. Embedding text = title + tags
+    // (cheap, semantically meaningful in practice).
+    const embedText = [g.title, ...g.affected_tags].filter(Boolean).join(" — ");
+    let embedding: number[] | null = null;
+    try {
+      const tracked = await trackAICall({
+        supabase,
+        userId,
+        operation: "embed_material",
+        model: "voyage-3",
+        metadata: { source: "gap_creation", title: g.title },
+        call: () => embed(embedText).then((r) => ({ result: r.embedding, usage: r.usage })),
+      });
+      embedding = tracked.result;
+    } catch (err) {
+      // Don't fail gap creation just because embedding failed — without it the
+      // gap simply won't surface in loop closure, but the user can still see it.
+      console.warn("[gap-runner] embed failed for", g.title, err);
+    }
+
     const { error } = await supabase.from("knowledge_gaps").insert({
       user_id: userId,
       title: g.title,
@@ -73,6 +95,7 @@ export async function detectGapsForUser(
       affected_tags: g.affected_tags,
       affected_materials: g.affected_materials,
       status: "open",
+      embedding,
     });
 
     if (!error) inserted += 1;

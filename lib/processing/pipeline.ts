@@ -1,24 +1,23 @@
 /**
  * Material import pipeline. Runs sequentially through 9 steps per CLAUDE.md.
  * Owns lifecycle of one `processing_jobs` row + creates one `materials` row +
- * creates many `items` rows + (later) `topic_audits` rows.
+ * creates many `items` rows + `topic_audits` rows.
  *
  * Called from /api/materials/import after the row is created. Each step writes
  * progress; failures mark the job as failed and re-throw.
- *
- * NOTE: step 3 (embed) currently uses a deterministic mock vector because we
- * don't have a Voyage API key yet. Replace with real `embed()` from lib/ai/voyage
- * before relying on dedup or semantic search. Marked TODO(voyage) below.
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { trackAICall } from "@/lib/ai/track";
+import { embed } from "@/lib/ai/voyage";
 import { compressMaterial, autoTagMaterial } from "./compress-and-tag";
 import { generateClozeCards, generateOpenQuestions } from "./generate-items";
 import { initialFsrsState } from "@/lib/fsrs/scheduler";
 import type { Category, ImportJobPayload } from "@/lib/db/types";
 
-const VECTOR_DIM = 1024;
+const DEDUP_AUTO_MERGE_THRESHOLD = 0.92;
+const DEDUP_FLAG_THRESHOLD = 0.85;
+const GAP_MATCH_THRESHOLD = 0.8;
 
 interface PipelineContext {
   supabase: SupabaseClient;
@@ -37,12 +36,24 @@ export async function processMaterial(ctx: PipelineContext): Promise<{ materialI
     // Step 2: detect category — for M1 we trust user-supplied category from form.
     const category: Category = payload.category;
 
-    // Step 3: embedding (TODO(voyage) — replace mock with real call)
-    const embedding = mockEmbedding(payload.raw_text);
+    // Step 3: embedding (Voyage-3, 1024 dims)
+    const embedRes = await trackAICall({
+      supabase,
+      userId,
+      operation: "embed_material",
+      model: "voyage-3",
+      metadata: { jobId, source: "import_pipeline" },
+      call: () => embed(payload.raw_text).then((r) => ({ result: r.embedding, usage: r.usage })),
+    });
+    const embedding = embedRes.result;
     await markJob(supabase, jobId, { progress: 15 });
 
-    // Step 4: duplicate check — skip while embedding is mocked.
-    // (When real embeddings land: cosine sim > 0.92 = auto-merge, 0.85-0.92 = flag.)
+    // Step 4: duplicate check via cosine similarity (RPC match_materials).
+    // >0.92 → flagged as likely duplicate (we record relation but still continue
+    // import so the user has both — auto-merging is destructive). 0.85-0.92 →
+    // related material, recorded as a soft link. <0.85 → ignore.
+    const dedupCandidates = await findSimilarMaterials(supabase, embedding);
+    await markJob(supabase, jobId, { progress: 20 });
 
     // Step 5: compress (Haiku)
     const compressedRes = await trackAICall({
@@ -87,6 +98,30 @@ export async function processMaterial(ctx: PipelineContext): Promise<{ materialI
     if (insertErr || !material) throw new Error(`materials insert failed: ${insertErr?.message}`);
     const materialId = material.id;
     await markJob(supabase, jobId, { progress: 55 });
+
+    // Persist dedup relations now that we have a material_id to link from.
+    if (dedupCandidates.length > 0) {
+      const relationRows = dedupCandidates.map((c) => ({
+        user_id: userId,
+        material_a_id: materialId,
+        material_b_id: c.id,
+        relation_type: c.similarity >= DEDUP_AUTO_MERGE_THRESHOLD ? ("merged" as const) : ("related" as const),
+        similarity_score: Number(c.similarity.toFixed(3)),
+      }));
+      const { error: relErr } = await supabase.from("material_relations").insert(relationRows);
+      if (relErr) console.warn("[pipeline] dedup relation insert failed:", relErr.message);
+    }
+
+    // Loop closure: see if any open knowledge_gap matches this new material.
+    // Best match (if above threshold) gets stored on materials.suggested_gap_id
+    // so the material detail view can prompt the user with confirm/dismiss.
+    const gapCandidate = await findBestGapCandidate(supabase, embedding);
+    if (gapCandidate) {
+      await supabase
+        .from("materials")
+        .update({ suggested_gap_id: gapCandidate.id })
+        .eq("id", materialId);
+    }
 
     // Step 7a: generate cloze cards (Haiku)
     const clozeRes = await trackAICall({
@@ -172,6 +207,19 @@ export async function processMaterial(ctx: PipelineContext): Promise<{ materialI
         cloze_count: clozeRows.length,
         open_count: openRows.length,
         tags,
+        dedup_candidates: dedupCandidates.map((c) => ({
+          id: c.id,
+          title: c.title,
+          similarity: Number(c.similarity.toFixed(3)),
+          relation: c.similarity >= DEDUP_AUTO_MERGE_THRESHOLD ? "merged" : "related",
+        })),
+        gap_candidate: gapCandidate
+          ? {
+              id: gapCandidate.id,
+              title: gapCandidate.title,
+              similarity: Number(gapCandidate.similarity.toFixed(3)),
+            }
+          : null,
       },
     });
 
@@ -201,22 +249,54 @@ async function markJob(supabase: SupabaseClient, jobId: string, update: JobUpdat
   if (error) console.warn("[pipeline] job update failed:", error.message, update);
 }
 
+interface SimilarMaterial {
+  id: string;
+  similarity: number;
+  title: string;
+}
+
 /**
- * Deterministic placeholder vector based on text hash. Same text → same vector,
- * but vectors are not semantically meaningful — they are noise. Used only so
- * the schema constraint `embedding vector(1024)` is satisfied during M1 testing.
- *
- * TODO(voyage): replace with real embedding from `lib/ai/voyage.ts` before any
- * dedup or semantic-search feature ships.
+ * RPC wrapper around `match_materials` (cosine similarity over user's
+ * existing material embeddings). Threshold = the lower of the two dedup
+ * cutoffs, so we get both "merged" and "related" candidates in one call.
  */
-function mockEmbedding(text: string): number[] {
-  let seed = 0;
-  for (let i = 0; i < text.length; i++) seed = (seed * 31 + text.charCodeAt(i)) | 0;
-  const out = new Array<number>(VECTOR_DIM);
-  let s = seed || 1;
-  for (let i = 0; i < VECTOR_DIM; i++) {
-    s = (s * 1664525 + 1013904223) | 0;
-    out[i] = ((s & 0xffff) / 0xffff) * 2 - 1;
+async function findSimilarMaterials(
+  supabase: SupabaseClient,
+  embedding: number[]
+): Promise<SimilarMaterial[]> {
+  const { data, error } = await supabase.rpc("match_materials", {
+    query_embedding: embedding,
+    match_threshold: DEDUP_FLAG_THRESHOLD,
+    match_count: 5,
+    exclude_id: null,
+  });
+  if (error) {
+    console.warn("[pipeline] match_materials RPC failed:", error.message);
+    return [];
   }
-  return out;
+  return (data ?? []) as SimilarMaterial[];
+}
+
+interface SimilarGap {
+  id: string;
+  similarity: number;
+  title: string;
+  gap_type: string;
+}
+
+async function findBestGapCandidate(
+  supabase: SupabaseClient,
+  embedding: number[]
+): Promise<SimilarGap | null> {
+  const { data, error } = await supabase.rpc("match_gaps", {
+    query_embedding: embedding,
+    match_threshold: GAP_MATCH_THRESHOLD,
+    match_count: 1,
+  });
+  if (error) {
+    console.warn("[pipeline] match_gaps RPC failed:", error.message);
+    return null;
+  }
+  const list = (data ?? []) as SimilarGap[];
+  return list[0] ?? null;
 }

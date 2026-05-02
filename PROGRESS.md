@@ -4,6 +4,30 @@ Session handoff log. Most recent entry on top. Keep this file under 200 lines.
 
 ---
 
+## 2026-05-02 — M2 Phase 1 + 6: Voyage embeddings + dedup + loop closure (DONE) — M2 COMPLETE
+
+### Phase 1 — Voyage online
+- Migration `0004_voyage.sql`: adds `materials.suggested_gap_id` FK, `knowledge_gaps.embedding vector(1024)` + ivfflat index, plus two RPCs `match_materials` and `match_gaps` (cosine similarity scoped to `auth.uid()`).
+- Replaced `mockEmbedding` in `lib/processing/pipeline.ts` with real `embed()` via `trackAICall`.
+- Voyage client rewritten as raw fetch (`lib/ai/voyage.ts`) — the `voyageai` npm SDK has broken ESM exports under Turbopack production builds. Lesson captured in `tasks/lessons.md`.
+- Pipeline step 4 (dedup) now active: `match_materials` returns top-5 candidates ≥ 0.85; ≥ 0.92 → relation_type='merged'; 0.85-0.92 → 'related'. Both go into `material_relations`. Auto-merging the row was rejected as too destructive — we record the relation but keep both materials so the user can decide.
+- Pipeline now embeds text passed to Voyage (raw text, capped server-side by parser at 200k chars; Voyage will tokenize). Cost ~$0.0001 per typical material.
+
+### Phase 6 — Loop closure on import
+- Each gap now gets embedded at creation time (`embed(title + tags joined)`) by `lib/gaps/runner.ts`. Failures are non-fatal (gap still stored, just won't surface in loop closure).
+- Pipeline calls `match_gaps(0.80)` after embedding the new material. Best match (if any) is written to `materials.suggested_gap_id` and exposed in `processing_jobs.result.gap_candidate`.
+- `app/(app)/materials/[id]/gap-link-banner.tsx` — emerald-bordered banner shows on the material detail page when `suggested_gap_id` is set. "Tak — zamknij lukę" flips the gap to status='addressed' (sets `addressed_by_material_id` + `addressed_at`); "Nie — odrzuć sugestię" just clears the suggestion.
+- `app/api/materials/[id]/link-gap/route.ts` — handles confirm + dismiss, both clear `suggested_gap_id` so the banner stops showing.
+- `app/api/dev/backfill-embeddings/route.ts` — re-embeds all of the user's materials (overwriting old stub vectors) and any gaps without embeddings. One-shot helper for the migration.
+
+### Verification
+- `npx tsc --noEmit` clean. `npm run build` green (32 routes). Real Voyage end-to-end test pending — user needs to apply migration `0004_voyage.sql` and run backfill.
+
+### M2 status
+**M2 COMPLETE.** All 9 phases shipped. Ready for general M2 verification + M3 planning.
+
+---
+
 ## 2026-05-02 — M2 Phase 7: Quick + filtered search (DONE; semantic deferred)
 
 - `GET /api/search` — text query (ILIKE on title + content_compressed) + composable filters (category / tag / status). 200ms-class on our scale; will be replaced by Postgres FTS + Voyage semantic in the same migration that adds the embeddings column.

@@ -2,7 +2,7 @@
 
 ## Current State
 
-**M1 (Core Loop) — DONE.** **M2 Phases 2 + 3 + 4 + 5 + 7 + 8 + 9 — DONE.** Only Phases 1 (Voyage embeddings + dedup) and 6 (loop closure) remain — both blocked on Voyage API key. M2 effectively complete pending Voyage; M3 (PWA / offline / mobile UX) is the next milestone.
+**M1 — DONE. M2 — DONE (all 9 phases).** Ready for M2 general verification + M3 planning. M3 covers PWA / offline / mobile UX.
 
 Full loop tested end-to-end:
 - Magic Link login → Supabase session
@@ -105,10 +105,12 @@ Total spend in M1 testing so far: ~\$0.04. Soft limit \$5 nowhere near.
 
 ## M2 — Smart Layer (in progress)
 
-### Phase 1 — Voyage embeddings + dedup (BLOCKED on VOYAGE_API_KEY)
-- User's Voyage console couldn't issue a key on first try; user is troubleshooting in parallel.
-- Pipeline still uses deterministic stub vector (TODO(voyage) in lib/processing/pipeline.ts).
-- Once key lands: replace stub with `embed()`, enable cosine dedup at step 4 (auto-merge >0.92, flag 0.85–0.92), backfill embeddings for existing materials, then unblock M2 Phase 6 (loop closure) and Phase 7 semantic search tier.
+### Phase 1 — Voyage embeddings + dedup (DONE)
+- [x] Migration 0004 (RPCs + gaps embedding + materials.suggested_gap_id)
+- [x] Real `embed()` in pipeline replacing mockEmbedding
+- [x] Dedup writes `material_relations` rows (merged ≥0.92, related 0.85-0.92)
+- [x] Voyage REST fetch (SDK rejected; ESM broken under Turbopack)
+- [x] `/api/dev/backfill-embeddings` for existing materials + gaps
 
 ### Phase 2 — Topic audits execution (DONE)
 - [x] Migration `0002_audits.sql`: `topic_audits.session_id`, `items.audit_id`, pg_cron install snippet for `audits-daily`
@@ -141,7 +143,11 @@ Total spend in M1 testing so far: ~\$0.04. Soft limit \$5 nowhere near.
 - [x] `app/api/gaps/[id]/generate-prompt/route.ts` (resolves domain + material titles)
 - [x] `app/(app)/gaps/[id]/page.tsx` with Copy + Open Claude.ai + Regenerate + Dismiss
 
-### Phase 6 — Loop closure on import (BLOCKED on Voyage)
+### Phase 6 — Loop closure on import (DONE)
+- [x] Each new gap embedded at creation time (`runner.ts`)
+- [x] Pipeline calls `match_gaps(0.80)` after material embed; best match → `materials.suggested_gap_id`
+- [x] Banner on `/materials/[id]` with confirm (gap → 'addressed') / dismiss
+- [x] `POST /api/materials/[id]/link-gap`
 ### Phase 7 — Search (DONE; semantic blocked on Voyage)
 - [x] `GET /api/search` (ILIKE + category/tag/status filters; FTS + semantic land with the Voyage migration)
 - [x] `/search` page with debounced input, 3 dropdowns, snippet excerpt

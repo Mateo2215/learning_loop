@@ -32,6 +32,10 @@ Project-specific gotchas. For universal patterns see `../../global-lessons.md`.
 
 - **Cron generation = wasted spend.** Don't pre-generate audit questions in the cron heartbeat. Sonnet audit generation costs ~$0.005–$0.02 each; pre-generating for every due audit pays even when the user never runs them. Pattern: cron only counts/surfaces due audits, generation happens lazily on the "Zacznij audyt" click via an idempotent `prepareAudit()`.
 
+## Voyage SDK
+
+- **`voyageai` npm SDK has broken ESM exports under Turbopack production builds.** Symptom: `npm run build` fails with "Module not found: Can't resolve '../Client'" / '../api' / '../errors' / '../local' / './ExtendedClient'. Dev server works fine because Turbopack dev resolution is more lenient. Fix: skip the SDK entirely, call the Voyage REST API directly (`POST https://api.voyageai.com/v1/embeddings` with `Authorization: Bearer $KEY`). The endpoint is trivial — `{ model, input: [text] }` in, `{ data: [{embedding}], usage }` out. No reason to keep an SDK in the bundle just for this.
+
 ## M2 audits
 
 - **Audit items need a separate scope.** Audit-generated questions live in `items` (so reviews can FK to them) but with `audit_id` set. Every other reader of `items` (review queue, deep-dive picker, dashboard counts) must filter `audit_id is null`. Easy to forget — would cause regular pools to mix audit questions in. Pattern: explicit `.is("audit_id", null)` on every non-audit query.
