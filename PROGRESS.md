@@ -4,6 +4,19 @@ Session handoff log. Most recent entry on top. Keep this file under 200 lines.
 
 ---
 
+## 2026-05-02 — M2 Phase 7: Quick + filtered search (DONE; semantic deferred)
+
+- `GET /api/search` — text query (ILIKE on title + content_compressed) + composable filters (category / tag / status). 200ms-class on our scale; will be replaced by Postgres FTS + Voyage semantic in the same migration that adds the embeddings column.
+- `app/(app)/search/page.tsx` server component pre-loads available tags from existing materials so the filter dropdown shows real options.
+- `app/(app)/search/search-client.tsx` — debounced (250ms) input, three filter dropdowns (category / tag / status), match snippet with surrounding context, tag chips, link to material detail.
+- Nav has 'Szukaj'. Build green (30 routes), tsc clean.
+
+The semantic tier (`mode=semantic`) is a one-branch addition once Voyage embeddings are real. Index is already in place (`materials_embedding_idx` ivfflat).
+
+This closes M2 work that's unblocked by Voyage. Outstanding M2 work: Phase 1 (Voyage embeddings + dedup) and Phase 6 (loop closure on import) — both blocked on the API key.
+
+---
+
 ## 2026-05-02 — M2 Phase 9: Item editing + JSON export (DONE)
 
 - `PATCH /api/items/[id]` — edit `question` and/or `answer_reference`. First edit copies the current question into `original_question`; subsequent edits only bump `edit_count`. Audit-only items are immutable (their `audit_id` is set, route rejects).

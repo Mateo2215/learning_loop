@@ -2,7 +2,7 @@
 
 ## Current State
 
-**M1 (Core Loop) — DONE.** **M2 Phases 2 + 3 + 4 + 5 + 8 + 9 — DONE.** Voyage AI key still blocked; Phases 1 + 6 + semantic search tier deferred. Phase 7 quick + filtered search remains the last unblocked work item before M3.
+**M1 (Core Loop) — DONE.** **M2 Phases 2 + 3 + 4 + 5 + 7 + 8 + 9 — DONE.** Only Phases 1 (Voyage embeddings + dedup) and 6 (loop closure) remain — both blocked on Voyage API key. M2 effectively complete pending Voyage; M3 (PWA / offline / mobile UX) is the next milestone.
 
 Full loop tested end-to-end:
 - Magic Link login → Supabase session
@@ -142,7 +142,10 @@ Total spend in M1 testing so far: ~\$0.04. Soft limit \$5 nowhere near.
 - [x] `app/(app)/gaps/[id]/page.tsx` with Copy + Open Claude.ai + Regenerate + Dismiss
 
 ### Phase 6 — Loop closure on import (BLOCKED on Voyage)
-### Phase 7 — 3-tier search (semantic blocked on Voyage; quick + filtered can ship now)
+### Phase 7 — Search (DONE; semantic blocked on Voyage)
+- [x] `GET /api/search` (ILIKE + category/tag/status filters; FTS + semantic land with the Voyage migration)
+- [x] `/search` page with debounced input, 3 dropdowns, snippet excerpt
+- [x] Nav 'Szukaj'
 ### Phase 8 — Calibration offsets (DONE)
 - [x] `lib/calibration/aggregator.ts` (formula in [-1,+1], MIN_SAMPLE floor, idempotent upsert)
 - [x] `validate-open` system prompt accepts offset and adds lenient/strict hint when |offset| ≥ 0.2
