@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -121,9 +122,12 @@ export function GapsClient({ initialGaps }: { initialGaps: KnowledgeGap[] }) {
                     ))}
                   </div>
                 )}
-                <div className="flex justify-end">
+                <div className="flex justify-end gap-2">
                   <Button variant="ghost" size="sm" onClick={() => dismissGap(g.id)}>
                     Odrzuć
+                  </Button>
+                  <Button variant="outline" size="sm" asChild>
+                    <Link href={`/gaps/${g.id}`}>Szczegóły →</Link>
                   </Button>
                 </div>
               </CardContent>

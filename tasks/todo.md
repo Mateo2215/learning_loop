@@ -2,7 +2,7 @@
 
 ## Current State
 
-**M1 (Core Loop) — DONE.** **M2 Phases 2 (audits) + 3 (leech rotation) + 4 (gap detection) — DONE.** Voyage AI key still blocked (user troubleshooting); M2 Phase 1 deferred until key lands.
+**M1 (Core Loop) — DONE.** **M2 Phases 2 (audits) + 3 (leech rotation) + 4 (gap detection) + 5 (Claude.ai prompt generation) — DONE.** Voyage AI key still blocked (user troubleshooting); M2 Phase 1 + 6 deferred until key lands.
 
 Full loop tested end-to-end:
 - Magic Link login → Supabase session
@@ -136,10 +136,10 @@ Total spend in M1 testing so far: ~\$0.04. Soft limit \$5 nowhere near.
 - [x] `app/api/gaps/detect`, `app/api/gaps/[id]/dismiss`, `app/api/cron/gaps`
 - [x] `/gaps` page + nav link + dashboard tile + CTA
 
-### Phase 5 — Prompt generation for Claude.ai
-- [ ] `lib/ai/prompts/generate-claude-prompt.ts`
-- [ ] `app/api/gaps/[id]/generate-prompt/route.ts`
-- [ ] `app/(app)/gaps/[id]/page.tsx` with Copy + Open Claude.ai
+### Phase 5 — Prompt generation for Claude.ai (DONE)
+- [x] `lib/ai/prompts/generate-claude-prompt.ts` + `lib/ai/generate-claude-prompt.ts`
+- [x] `app/api/gaps/[id]/generate-prompt/route.ts` (resolves domain + material titles)
+- [x] `app/(app)/gaps/[id]/page.tsx` with Copy + Open Claude.ai + Regenerate + Dismiss
 
 ### Phase 6 — Loop closure on import (BLOCKED on Voyage)
 ### Phase 7 — 3-tier search (semantic blocked on Voyage; quick + filtered can ship now)

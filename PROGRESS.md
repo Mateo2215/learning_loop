@@ -4,6 +4,19 @@ Session handoff log. Most recent entry on top. Keep this file under 200 lines.
 
 ---
 
+## 2026-05-02 — M2 Phase 5: Claude.ai prompt generation (DONE)
+
+- `lib/ai/prompts/generate-claude-prompt.ts` Sonnet system prompt — produces a ready-to-paste prompt matching CLAUDE.md template (3000-word PL/EN-tech report request, .docx output).
+- `lib/ai/generate-claude-prompt.ts` Sonnet wrapper (no JSON, plain text output).
+- `app/api/gaps/[id]/generate-prompt/route.ts` — picks dominant material category as "domain", resolves material UUIDs to titles for clearer AI input, persists result to `knowledge_gaps.generated_prompt`.
+- `app/(app)/gaps/[id]/page.tsx` + `detail-client.tsx` — gap details with severity badge, tag chips, material list, "Wygeneruj prompt" → readonly textarea + "Skopiuj prompt" + "Otwórz Claude.ai" + "Wygeneruj ponownie" + "Odrzuć lukę".
+- `/gaps` list now has "Szczegóły →" link per gap.
+- No new migration. Build green (25 routes), tsc clean.
+
+The user-facing loop is now: detect gaps → click into one → generate prompt → copy → paste into Claude.ai → get .docx → import into Learning Loop. The "import closes the gap automatically" piece (Phase 6) remains blocked on Voyage embeddings; for now closure is manual via the "Odrzuć" button or addressed_at can be set by hand.
+
+---
+
 ## 2026-05-02 — M2 Phase 4: Knowledge gap detection (DONE)
 
 - Migration `0003_gaps.sql` adds `knowledge_gaps.title` (Sonnet-generated PL title).
