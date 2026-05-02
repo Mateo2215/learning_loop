@@ -126,6 +126,23 @@ export interface TopicAudit {
   updated_at: string;
 }
 
+export interface KnowledgeGap {
+  id: string;
+  user_id: string;
+  title: string | null;
+  gap_type: GapType;
+  affected_tags: string[];
+  affected_materials: string[];
+  severity: GapSeverity;
+  detected_at: string;
+  generated_prompt: string | null;
+  status: GapStatus;
+  addressed_by_material_id: string | null;
+  addressed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export const CATEGORIES: readonly Category[] = [
   "finanse",
   "programowanie",

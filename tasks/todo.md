@@ -2,7 +2,7 @@
 
 ## Current State
 
-**M1 (Core Loop) — DONE.** **M2 Phases 2 (audits) + 3 (leech rotation) — DONE.** Voyage AI key still blocked (user troubleshooting); M2 Phase 1 deferred until key lands.
+**M1 (Core Loop) — DONE.** **M2 Phases 2 (audits) + 3 (leech rotation) + 4 (gap detection) — DONE.** Voyage AI key still blocked (user troubleshooting); M2 Phase 1 deferred until key lands.
 
 Full loop tested end-to-end:
 - Magic Link login → Supabase session
@@ -128,11 +128,13 @@ Total spend in M1 testing so far: ~\$0.04. Soft limit \$5 nowhere near.
 - [x] `selectReviewItems` prepends up to 2 leeches when rotation is due
 - [x] Amber "leech" badge with tooltip in `/sessions/review`
 
-### Phase 4 — Knowledge gap detection (next)
-- [ ] `lib/gaps/detector.ts` — 4 gap types (low_correct_rate, stale_topic, rising_failures, never_consolidated)
-- [ ] `lib/ai/prompts/detect-gaps.ts` Sonnet ranking
-- [ ] `app/api/gaps/detect/route.ts` (on-demand) + `app/api/cron/gaps/route.ts` (weekly)
-- [ ] `app/(app)/gaps/page.tsx`
+### Phase 4 — Knowledge gap detection (DONE)
+- [x] Migration `0003_gaps.sql` — `knowledge_gaps.title`
+- [x] `lib/gaps/detector.ts` — 4 rule-based detectors
+- [x] `lib/ai/prompts/detect-gaps.ts` + `lib/ai/detect-gaps.ts` Sonnet ranker
+- [x] `lib/gaps/runner.ts` orchestrator with dedup
+- [x] `app/api/gaps/detect`, `app/api/gaps/[id]/dismiss`, `app/api/cron/gaps`
+- [x] `/gaps` page + nav link + dashboard tile + CTA
 
 ### Phase 5 — Prompt generation for Claude.ai
 - [ ] `lib/ai/prompts/generate-claude-prompt.ts`

@@ -33,6 +33,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             <NavLink href="/sessions/review" label="Review" />
             <NavLink href="/sessions/deep-dive" label="Deep Dive" />
             <NavLink href="/sessions/audit" label="Audyty" />
+            <NavLink href="/gaps" label="Luki" />
             <NavLink href="/costs" label="Koszty" />
             <span className="hidden sm:inline-block text-xs text-zinc-500 dark:text-zinc-400 font-mono mx-3">
               {user.email}

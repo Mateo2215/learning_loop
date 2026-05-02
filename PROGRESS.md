@@ -4,6 +4,21 @@ Session handoff log. Most recent entry on top. Keep this file under 200 lines.
 
 ---
 
+## 2026-05-02 — M2 Phase 4: Knowledge gap detection (DONE)
+
+- Migration `0003_gaps.sql` adds `knowledge_gaps.title` (Sonnet-generated PL title).
+- `lib/gaps/detector.ts` — 4 rule-based detectors (low_correct_rate, stale_topic, rising_failures, never_consolidated). Pure SQL aggregates, no AI cost.
+- `lib/ai/prompts/detect-gaps.ts` + `lib/ai/detect-gaps.ts` — Sonnet 4.6 ranker. Takes candidate list, picks max 8, assigns severity (low/medium/high), writes Polish title.
+- `lib/gaps/runner.ts` — orchestrator. Dedupes against already-open gaps with overlapping tags or materials before insert (so weekly cron doesn't flood the list).
+- `app/api/gaps/detect/route.ts` — on-demand button. `app/api/gaps/[id]/dismiss/route.ts` — user can mark false-positive. `app/api/cron/gaps/route.ts` — weekly heartbeat (Bearer-guarded, iterates users via service_role; pg_cron snippet inside the file).
+- `app/(app)/gaps/page.tsx` + client component — severity-sorted list with red/amber/zinc badges, tag chips, "Wykryj luki teraz" + "Odrzuć" buttons.
+- Dashboard now 6-tile (3 cols), `otwarte luki` highlighted, conditional CTA when > 0. Nav has 'Luki'.
+- Build green (24 routes), tsc clean.
+
+Verification: user needs to apply migration `0003_gaps.sql`, then click "Wykryj luki teraz" on /gaps. With minimal review history detectors may return 0 candidates — that's normal. Worth running again after a week of real usage.
+
+---
+
 ## 2026-05-02 — M2 Phase 3: Leech rotation queue (DONE)
 
 - `lib/db/leeches.ts` — `getLastLeechExposureAt`, `isLeechRotationDue` (≥7d since last leech review AND user has at least one leech), `pickLeechCandidates` (sorted by fsrs_due_date asc).
