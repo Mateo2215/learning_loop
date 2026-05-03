@@ -63,9 +63,14 @@ export async function POST() {
 
   let gapsUpdated = 0;
   let gapsFailed = 0;
+  const gapErrors: Array<{ id: string; reason: string }> = [];
   for (const g of (gaps ?? []) as { id: string; title: string | null; affected_tags: string[] | null }[]) {
     const text = [g.title ?? "", ...(g.affected_tags ?? [])].filter(Boolean).join(" — ");
-    if (!text) continue;
+    if (!text) {
+      gapsFailed += 1;
+      gapErrors.push({ id: g.id, reason: "empty embed text (no title or tags)" });
+      continue;
+    }
     try {
       const tracked = await trackAICall({
         supabase,
@@ -79,16 +84,21 @@ export async function POST() {
         .from("knowledge_gaps")
         .update({ embedding: tracked.result })
         .eq("id", g.id);
-      if (error) gapsFailed += 1;
-      else gapsUpdated += 1;
-    } catch {
+      if (error) {
+        gapsFailed += 1;
+        gapErrors.push({ id: g.id, reason: `update error: ${error.message}` });
+      } else {
+        gapsUpdated += 1;
+      }
+    } catch (err) {
       gapsFailed += 1;
+      gapErrors.push({ id: g.id, reason: err instanceof Error ? err.message : String(err) });
     }
   }
 
   return NextResponse.json({
     ok: true,
     materials: { updated: materialsUpdated, failed: materialsFailed },
-    gaps: { updated: gapsUpdated, failed: gapsFailed },
+    gaps: { updated: gapsUpdated, failed: gapsFailed, errors: gapErrors },
   });
 }

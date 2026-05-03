@@ -32,6 +32,14 @@ Project-specific gotchas. For universal patterns see `../../global-lessons.md`.
 
 - **Cron generation = wasted spend.** Don't pre-generate audit questions in the cron heartbeat. Sonnet audit generation costs ~$0.005–$0.02 each; pre-generating for every due audit pays even when the user never runs them. Pattern: cron only counts/surfaces due audits, generation happens lazily on the "Zacznij audyt" click via an idempotent `prepareAudit()`.
 
+## Voyage thresholds
+
+- **Asymmetric similarity is structurally lower than CLAUDE.md assumed.** Gap text (title + 2-4 tags joined, ~30 tokens) vs material content (full document, ~thousands of tokens) gives cosine in the 0.55-0.75 range even on the same topic. The 0.80 threshold suggested in CLAUDE.md was set in the abstract — measured on a real DCF gap matched against a DCF material it returned 0.638. Practical floor for short-text-vs-long-document with Voyage-3: ~0.60. Bumped GAP_MATCH_THRESHOLD to 0.60 in pipeline.ts. If false positives surface in production, revisit (richer gap embeddings — e.g. concat material_titles into the embed text — would raise scores symmetrically without lowering threshold).
+
+## Voyage rate limits
+
+- **Free tier (no payment method) caps at 3 RPM + 10K TPM.** Steady-state app usage is fine (a few embeds/day) but ANY batched op breaks: backfill, gap detection that emits 5+ gaps, bulk import. Symptom: HTTP 429 with body explaining the limit. Adding a payment method (no charge — Voyage gives 200M free tokens for voyage-3 even after) bumps to standard limits ~5 minutes after card verification. Use a virtual card with low limit if uncomfortable. Alternative: throttle to 1 call per 21s globally — works but adds long delays to backfills and gap creation.
+
 ## Voyage SDK
 
 - **`voyageai` npm SDK has broken ESM exports under Turbopack production builds.** Symptom: `npm run build` fails with "Module not found: Can't resolve '../Client'" / '../api' / '../errors' / '../local' / './ExtendedClient'. Dev server works fine because Turbopack dev resolution is more lenient. Fix: skip the SDK entirely, call the Voyage REST API directly (`POST https://api.voyageai.com/v1/embeddings` with `Authorization: Bearer $KEY`). The endpoint is trivial — `{ model, input: [text] }` in, `{ data: [{embedding}], usage }` out. No reason to keep an SDK in the bundle just for this.

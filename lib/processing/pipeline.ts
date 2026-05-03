@@ -17,7 +17,10 @@ import type { Category, ImportJobPayload } from "@/lib/db/types";
 
 const DEDUP_AUTO_MERGE_THRESHOLD = 0.92;
 const DEDUP_FLAG_THRESHOLD = 0.85;
-const GAP_MATCH_THRESHOLD = 0.8;
+// Empirical: short gap text (title + tags) vs full-document material gives
+// cosine in the 0.55-0.75 range even on the same topic. CLAUDE.md proposed
+// 0.80 in the abstract — too strict for the asymmetric short-vs-long match.
+const GAP_MATCH_THRESHOLD = 0.6;
 
 interface PipelineContext {
   supabase: SupabaseClient;
