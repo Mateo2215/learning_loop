@@ -54,8 +54,17 @@ export async function GET(request: NextRequest) {
   if (tag) query = query.contains("tags", [tag]);
 
   if (q && q.length > 0) {
-    const escaped = q.replace(/[%_]/g, "\\$&");
-    query = query.or(`title.ilike.%${escaped}%,content_compressed.ilike.%${escaped}%`);
+    // Sanitize for both ILIKE wildcards AND PostgREST `.or()` separator parsing.
+    // Commas, parens, dots, asterisks and ampersands are operators inside an
+    // .or() string — strip them so a query like "foo,bar" or "(test)" can't
+    // be parsed as nested filter syntax. We also escape the ILIKE meta chars.
+    const safe = q
+      .replace(/[,()*&]/g, " ")
+      .replace(/[%_\\]/g, "\\$&")
+      .trim();
+    if (safe.length > 0) {
+      query = query.or(`title.ilike.%${safe}%,content_compressed.ilike.%${safe}%`);
+    }
   }
 
   query = query.order("imported_at", { ascending: false }).limit(limit);

@@ -45,13 +45,13 @@ export async function PATCH(
 
   const { data: existing } = await supabase
     .from("items")
-    .select("id, question, original_question, edit_count, audit_id")
+    .select("id, type, question, answer_reference, original_question, edit_count, audit_id, cloze_data")
     .eq("id", id)
     .eq("user_id", user.id)
     .maybeSingle();
 
   if (!existing) return NextResponse.json({ error: "item not found" }, { status: 404 });
-  const e = existing as Pick<Item, "id" | "question" | "original_question" | "edit_count" | "audit_id">;
+  const e = existing as Pick<Item, "id" | "type" | "question" | "answer_reference" | "original_question" | "edit_count" | "audit_id" | "cloze_data">;
   if (e.audit_id) {
     return NextResponse.json(
       { error: "audit items are not editable" },
@@ -64,6 +64,15 @@ export async function PATCH(
   if (parsed.data.answer_reference !== undefined) update.answer_reference = parsed.data.answer_reference;
   if (e.original_question == null) {
     update.original_question = e.question;
+  }
+
+  // Cloze items keep a parallel copy of front/answer in cloze_data — review UI
+  // reads cloze_data.front. Sync it on edit so the rendered card matches the
+  // edited question (and answer_reference if present).
+  if (e.type === "cloze") {
+    const nextFront = parsed.data.question ?? e.question;
+    const nextAnswer = parsed.data.answer_reference ?? e.answer_reference ?? e.cloze_data?.answer ?? "";
+    update.cloze_data = { front: nextFront, answer: nextAnswer };
   }
 
   const { error } = await supabase.from("items").update(update).eq("id", id);
