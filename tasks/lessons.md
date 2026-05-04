@@ -32,6 +32,15 @@ Project-specific gotchas. For universal patterns see `../../global-lessons.md`.
 
 - **Cron generation = wasted spend.** Don't pre-generate audit questions in the cron heartbeat. Sonnet audit generation costs ~$0.005–$0.02 each; pre-generating for every due audit pays even when the user never runs them. Pattern: cron only counts/surfaces due audits, generation happens lazily on the "Zacznij audyt" click via an idempotent `prepareAudit()`.
 
+## M3 PWA / theming
+
+- **Tailwind v4 `dark:` variant doesn't react to a `data-theme` attribute by default.** Tailwind v4 uses `@media (prefers-color-scheme: dark)`. To get `dark:bg-zinc-900` to fire when `<html data-theme="dark">`, register a custom variant in CSS: `@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));`. Without this, the toggle would update tokens but every existing `dark:*` class stays inert.
+- **`<html suppressHydrationWarning>` is required when an inline init script flips `data-theme` before hydration.** Server renders without the attribute (light), the inline script adds `data-theme="dark"` synchronously based on localStorage, React hydrates, sees mismatch, throws. `suppressHydrationWarning` silences the legitimate divergence (next-themes does the same).
+- **`@ducanh2912/next-pwa` ships 5 high-severity transitive vulns.** `npm audit` after install reports them via Workbox internals. For our scale a vanilla 80-line `public/sw.js` with NetworkFirst/CacheFirst strategies is simpler, has zero new deps, and stays auditable. The trade-off is no auto-generated cache manifest of Next.js bundles, so we cache by URL pattern.
+- **Service worker registration must be a no-op in dev.** Workbox dev support is bumpy with Next.js Turbopack; cached static assets fight HMR. Gate registration on `process.env.NODE_ENV === "production"` and only test the SW via `npm run build && npm run start`.
+- **Supabase Realtime needs explicit publication entries.** `supabase_realtime` publication exists by default but tables aren't auto-added. `alter publication supabase_realtime add table public.<name>` per table. Without it, channels SUBSCRIBE but no postgres_changes events fire — and the symptom is silence, not an error. Keep polling fallback for safety.
+- **`tailwindcss-animate` not installed in this project** — `data-[state=open]:animate-in` etc. classes resolve to nothing. Either install it or skip animation. We chose skip.
+
 ## Voyage thresholds
 
 - **Asymmetric similarity is structurally lower than CLAUDE.md assumed.** Gap text (title + 2-4 tags joined, ~30 tokens) vs material content (full document, ~thousands of tokens) gives cosine in the 0.55-0.75 range even on the same topic. The 0.80 threshold suggested in CLAUDE.md was set in the abstract — measured on a real DCF gap matched against a DCF material it returned 0.638. Practical floor for short-text-vs-long-document with Voyage-3: ~0.60. Bumped GAP_MATCH_THRESHOLD to 0.60 in pipeline.ts. If false positives surface in production, revisit (richer gap embeddings — e.g. concat material_titles into the embed text — would raise scores symmetrically without lowering threshold).

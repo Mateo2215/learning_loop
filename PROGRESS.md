@@ -4,6 +4,71 @@ Session handoff log. Most recent entry on top. Keep this file under 200 lines.
 
 ---
 
+## 2026-05-03 — M3 Phases 1–7 (DONE), Phase 8 IN PROGRESS, 9-11 PENDING
+
+Started M3 (Polish & Mobile). Build still green at every commit. Stopped before Phase 8 to compact context. 7 commits on master.
+
+### Phase 1 — Theme system (commit `6424bc7` + fix `7fef0b8`)
+- `app/globals.css`: paired `:root` (light) + `[data-theme="dark"]` (dark) with semantic tokens (`--bg-canvas`, `--fg-primary`, `--accent`, etc.). Tailwind v4 `dark:` variant remapped via `@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *))` so existing `dark:*` classes react to the toggle.
+- `lib/theme/provider.tsx`: own ThemeProvider (no next-themes dep). API: `useTheme() → { theme, resolvedTheme, setTheme, autoSwitchEnabled, setAutoSwitchEnabled }`. Persists to `localStorage["theme"]`. Inline `THEME_INIT_SCRIPT` runs before paint to avoid FOUC.
+- Auto-switch (force dark 19:00–06:00) opt-in from `/settings`.
+- `components/shared/theme-toggle.tsx`: 3-button radio group (Sun/Moon/Monitor).
+- Mounted in `app/layout.tsx`. `<html suppressHydrationWarning>` because the init script legitimately mutates DOM before hydration.
+
+### Phase 2 — PWA manifest + icons (commit `ace7bc6`)
+- `public/icon.svg` source-of-truth (LL on emerald background, maskable safe zone).
+- `sharp` (already a Next.js dep) generates: `icon-192.png`, `icon-512.png`, `apple-touch-icon.png` (180px), `favicon-32.png`, `favicon-16.png`.
+- `public/manifest.json`: `display: "standalone"`, `start_url: "/dashboard"`, both PNG and SVG icon entries with `purpose: "any maskable"` on 512.
+- `app/layout.tsx`: `metadata.manifest`, `metadata.icons`, `metadata.appleWebApp`, `viewport` with `viewportFit: "cover"` + per-mode `themeColor`.
+
+### Phase 3 — Service worker + install prompt (commit `de5a1ed`)
+- Skipped `@ducanh2912/next-pwa` after `npm audit` reported 5 high-severity transitive vulns. Wrote ~80-line vanilla SW (`public/sw.js`):
+  - NetworkFirst with 5s timeout for `/api/*`, with cache fallback returning `503 offline`.
+  - CacheFirst for `/_next/static/*`, manifest, icons.
+  - NetworkFirst with cache + `/` fallback for navigation HTML.
+  - Cache version bump on activate clears stale caches; SKIP_WAITING postMessage handler.
+- `components/shared/sw-register.tsx`: client component, registers on window load, **no-op in dev** to avoid HMR collisions.
+- `components/shared/install-prompt.tsx`: handles `beforeinstallprompt` (Chrome) + iOS Safari fallback ("Share → Add to Home Screen"). Dismissal sticky 30 days.
+
+### Phase 4 — Mobile-first session UI (commit `dd3ee05`)
+- All three session screens (`review`, `deep-dive/[material_id]`, `audit/[audit_id]`) restructured: `min-h-[100dvh]` flex column, top metadata strip, mid content card flex-1, bottom sticky action area with `pb-[calc(env(safe-area-inset-bottom)+1rem)]` for notch handling.
+- Every tap target now `min-h-14` (56px). Existing keyboard shortcuts preserved.
+- `components/sessions/answer-input.tsx`: wraps Textarea with `mode: 'text' | 'voice'` prop. Voice mode currently a disabled mic icon with tooltip — hook for future Web Speech API integration.
+
+### Phase 5 — Hamburger drawer for mobile nav (commit `816451c`)
+- `app/(app)/layout.tsx` restructured: extracted `NAV_ITEMS` constant, desktop nav `hidden md:flex`, sticky top header, `MobileNav` rendered <md.
+- `components/shared/mobile-nav.tsx` uses `@radix-ui/react-dialog` (already installed via the umbrella `radix-ui` package, no new dep) as a side sheet. Lists routes vertically + theme toggle + sign-out.
+- Skipped `tailwindcss-animate` (not installed); drawer pops without slide animation.
+
+### Phase 6 — Offline IndexedDB queue + sync endpoint (commit `2c3879a`)
+- Installed `idb` (~3KB).
+- `lib/offline/db.ts`: stores `cached_sessions` and `pending_reviews` (indexed by session_id and sync_status). Schema v1.
+- `lib/offline/queue.ts`: `queueReview()` writes to IDB; `flushQueue()` batch-sends to `/api/sessions/sync-offline`, deletes successes, leaves failures with `last_error`.
+- `app/api/sessions/sync-offline/route.ts`: per-review processing — cloze does FSRS update + insert, open does Sonnet validate via `trackAICall` (sequential to play nice with rate limits). Returns `{ client_id, ok, error? }` per review.
+- `components/shared/online-indicator.tsx`: pill badge showing online/offline + queued count, auto-flushes on `online` event. Mounted globally in `(app)/layout.tsx`.
+- **Review (cloze) sessions** queue when offline AND fall back to queue on network errors mid-flight (rating never lost). **Deep-dive + audit** sessions show toast "Walidacja AI wymaga internetu" if offline (open answers need Sonnet, no offline path).
+
+### Phase 7 — Realtime subscriptions (commit `09316a4`)
+- Migration `0005_realtime.sql`: idempotent DO blocks adding `processing_jobs`, `materials`, `sessions` to `supabase_realtime` publication.
+- `lib/realtime/subscriptions.ts`: `subscribeProcessingJob(jobId, onChange)` and `subscribeMaterials(userId, onChange)` helpers.
+- `app/(app)/materials/import/page.tsx`: replaced 1.5s polling with Realtime subscription + 5s polling fallback (idempotent `handleJobUpdate`). Sub-second progress when Realtime works, graceful degradation otherwise.
+
+### Manual steps for user (between phases 6 and 7)
+- Apply migration `0005_realtime.sql` in Supabase SQL Editor (3 idempotent DO blocks). Without this, Realtime channels SUBSCRIBE but no postgres_changes events fire and the page falls back to 5s polling.
+
+### Outstanding for M3
+- **Phase 8** — Cross-device session guard (active-session check in `/api/sessions/start`) + Fresh Materials widget on `/dashboard` (24h-old materials with no review session yet) + `mode='voice'` adopted on AnswerInput. Voice hook is already in place from Phase 4.
+- **Phase 9** — Error boundaries (`app/error.tsx`, `app/(app)/error.tsx`, `app/not-found.tsx`), Lighthouse run + fixes, `voyageai` removal from package.json (now using raw fetch).
+- **Phase 10** — Visual polish (final reskin per user request: full token system in `tailwind.config.ts`, accent palette decision, shared component library `page-header`, `stat-tile`, `empty-state`, `severity-badge`, `section-card`, `loading-skeleton`, `confirm-button`, applied across all pages).
+- **Phase 11** — Final QA against the 14-point verification list, docs, M3 closing commit.
+
+### Build state
+- `tsc --noEmit` clean
+- `npm run build` green (33 routes after sync-offline endpoint)
+- All seven M3 commits pushed to master
+
+---
+
 ## 2026-05-02 — M2 Phase 1 + 6: Voyage embeddings + dedup + loop closure (DONE) — M2 COMPLETE
 
 ### Phase 1 — Voyage online

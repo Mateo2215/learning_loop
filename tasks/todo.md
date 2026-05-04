@@ -2,7 +2,42 @@
 
 ## Current State
 
-**M1 — DONE. M2 — DONE (all 9 phases).** Ready for M2 general verification + M3 planning. M3 covers PWA / offline / mobile UX.
+**M1 — DONE. M2 — DONE. M3 Phases 1–7 DONE, 8–11 PENDING.** Stopped before Phase 8 to compact context. Build still green. See PROGRESS.md most-recent entry for what to pick up.
+
+## M3 — Polish & Mobile (in progress)
+
+### Phase 1 — Theme system (DONE)
+### Phase 2 — PWA manifest + icons (DONE)
+### Phase 3 — Service worker + install prompt (DONE)
+### Phase 4 — Mobile-first session UI + AnswerInput (DONE)
+### Phase 5 — Hamburger drawer mobile nav (DONE)
+### Phase 6 — Offline IndexedDB queue + sync endpoint (DONE)
+### Phase 7 — Realtime subscriptions for processing_jobs (DONE)
+
+### Phase 8 — Cross-device guard + voice + fresh materials (NEXT)
+- [ ] `lib/sessions/active-guard.ts` — check for unfinished session on another device
+- [ ] `app/api/sessions/start/route.ts` extended with `force` flag, returns 409 with payload when active session exists elsewhere
+- [ ] UI in session start pages — "Masz aktywną sesję na innym urządzeniu" prompt
+- [ ] `mode='voice'` adopted on AnswerInput in deep-dive + audit pages (the disabled mic was already added in Phase 4)
+- [ ] `components/dashboard/fresh-materials.tsx` — query 24h-old materials with no review session yet
+- [ ] Wire widget into `app/(app)/dashboard/page.tsx` above the tile grid
+
+### Phase 9 — Error boundaries + performance (PENDING)
+- [ ] `app/error.tsx` (root) + `app/(app)/error.tsx` + `app/not-found.tsx`
+- [ ] Remove `voyageai` from package.json (Phase 1 M2 switched to raw fetch)
+- [ ] Lighthouse mobile run + per-finding fixes
+- [ ] Bundle size review (`next build` output)
+
+### Phase 10 — Visual polish (PENDING — major reskin per user)
+- [ ] `tailwind.config.ts` — palette + type scale + radius/shadow tokens (need to settle on accent — emerald-vivid was placeholder)
+- [ ] `components/shared/page-header.tsx`, `stat-tile.tsx`, `empty-state.tsx`, `severity-badge.tsx`, `section-card.tsx`, `loading-skeleton.tsx`, `confirm-button.tsx`
+- [ ] Reskin every page: dashboard, materials/*, sessions/*, gaps/*, search, costs, settings, login
+
+### Phase 11 — Final QA + docs (PENDING)
+- [ ] Walk the 14-point verification list in PROGRESS.md (Phase 1–3 plan)
+- [ ] `npm audit`, remove unused deps
+- [ ] Update lessons.md, todo.md, root CLAUDE.md if any decisions diverged from plan
+- [ ] Final M3 commit
 
 Full loop tested end-to-end:
 - Magic Link login → Supabase session
