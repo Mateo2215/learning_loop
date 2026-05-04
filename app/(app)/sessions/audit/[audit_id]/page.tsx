@@ -110,6 +110,12 @@ export default function AuditRunPage({ params }: { params: Promise<{ audit_id: s
       toast.error("Odpowiedź za krótka", { description: "Wpisz co najmniej kilka słów." });
       return;
     }
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      toast.error("Brak połączenia", {
+        description: "Walidacja AI wymaga internetu. Spróbuj ponownie gdy wrócisz online.",
+      });
+      return;
+    }
 
     setPhase("validating");
     try {

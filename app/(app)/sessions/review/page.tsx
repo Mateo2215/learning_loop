@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { queueReview } from "@/lib/offline/queue";
 
 interface ReviewItem {
   id: string;
@@ -99,8 +100,24 @@ export default function ReviewSessionPage() {
         setPhase("answering");
       }
 
-      // Fire-and-forget: persist rating in background.
+      // Persist rating: when offline, queue to IndexedDB; when online, hit the
+      // server directly. Fire-and-forget either way.
       void (async () => {
+        const offline = typeof navigator !== "undefined" && !navigator.onLine;
+        if (offline) {
+          try {
+            await queueReview({
+              session_id: sessionId,
+              item_id: item.id,
+              fsrs_rating: rating,
+              response_time_ms: responseTime,
+            });
+          } catch {
+            toast.error("Nie udało się zapisać lokalnie");
+          }
+          return;
+        }
+
         try {
           const res = await fetch(`/api/sessions/${sessionId}/answer`, {
             method: "POST",
@@ -112,8 +129,15 @@ export default function ReviewSessionPage() {
             }),
           });
           if (!res.ok) {
+            // Network failed mid-request — fall back to queue so we don't lose the rating.
+            await queueReview({
+              session_id: sessionId,
+              item_id: item.id,
+              fsrs_rating: rating,
+              response_time_ms: responseTime,
+            });
             const body = await res.json().catch(() => ({}));
-            toast.error("Nie zapisano odpowiedzi", {
+            toast.error("Zapisano lokalnie (ponowię)", {
               description: body.error ?? `HTTP ${res.status}`,
             });
             return;
@@ -122,7 +146,14 @@ export default function ReviewSessionPage() {
             await fetch(`/api/sessions/${sessionId}/end`, { method: "POST" });
           }
         } catch {
-          toast.error("Błąd sieci — odpowiedź nie zapisana");
+          // Network died — queue for later flush.
+          await queueReview({
+            session_id: sessionId,
+            item_id: item.id,
+            fsrs_rating: rating,
+            response_time_ms: responseTime,
+          });
+          toast.error("Brak sieci — zapisano lokalnie");
         }
       })();
     },
