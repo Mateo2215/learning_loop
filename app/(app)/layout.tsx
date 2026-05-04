@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { Button } from "@/components/ui/button";
+import { ThemeToggle } from "@/components/shared/theme-toggle";
 
 /**
  * Shared layout for all authenticated routes. Renders the top navigation bar.
@@ -40,8 +41,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             <span className="hidden sm:inline-block text-xs text-zinc-500 dark:text-zinc-400 font-mono mx-3">
               {user.email}
             </span>
+            <ThemeToggle />
             <form action={signOut}>
-              <Button type="submit" variant="ghost" size="sm">
+              <Button type="submit" variant="ghost" size="sm" className="ml-1">
                 Wyloguj
               </Button>
             </form>
