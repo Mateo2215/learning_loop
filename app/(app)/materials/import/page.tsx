@@ -8,6 +8,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { CATEGORIES, CATEGORY_LABELS, type Category } from "@/lib/db/types";
+import { subscribeProcessingJob } from "@/lib/realtime/subscriptions";
+import { createClient } from "@/lib/supabase/client";
+import type { RealtimeChannel } from "@supabase/supabase-js";
 
 type Mode = "file" | "paste";
 type Phase = "form" | "processing" | "done" | "error";
@@ -31,10 +34,16 @@ export default function ImportPage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [jobState, setJobState] = useState<JobState | null>(null);
   const pollRef = useRef<number | null>(null);
+  const channelRef = useRef<RealtimeChannel | null>(null);
 
   useEffect(() => {
     return () => {
       if (pollRef.current) window.clearInterval(pollRef.current);
+      if (channelRef.current) {
+        const supabase = createClient();
+        supabase.removeChannel(channelRef.current);
+        channelRef.current = null;
+      }
     };
   }, []);
 
@@ -82,41 +91,65 @@ export default function ImportPage() {
     }
 
     const { job_id } = (await res.json()) as { job_id: string };
-    pollJob(job_id);
+    trackJob(job_id);
   }
 
-  function pollJob(jobId: string) {
-    if (pollRef.current) window.clearInterval(pollRef.current);
+  function handleJobUpdate(data: JobState) {
+    setJobState(data);
+
+    if (data.status === "completed") {
+      stopTracking();
+      setPhase("done");
+      const cloze = data.result?.cloze_count ?? 0;
+      const open = data.result?.open_count ?? 0;
+      toast.success("Materiał zaimportowany", {
+        description: `${cloze} fiszek + ${open} pytań otwartych.`,
+      });
+      const materialId = data.result?.material_id;
+      if (materialId) {
+        setTimeout(() => router.push(`/materials/${materialId}`), 1200);
+      }
+    } else if (data.status === "failed") {
+      stopTracking();
+      const msg = data.error ?? "Pipeline nie zakończył się sukcesem.";
+      setPhase("error");
+      setErrorMessage(msg);
+      toast.error("Import nie powiódł się", { description: msg });
+    }
+  }
+
+  function stopTracking() {
+    if (pollRef.current) {
+      window.clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+    if (channelRef.current) {
+      const supabase = createClient();
+      supabase.removeChannel(channelRef.current);
+      channelRef.current = null;
+    }
+  }
+
+  /**
+   * Realtime subscription for live progress + a slow polling fallback in case
+   * the publication isn't enabled or events drop. Either path eventually fires
+   * `handleJobUpdate`, which is idempotent.
+   */
+  function trackJob(jobId: string) {
+    stopTracking();
+
+    channelRef.current = subscribeProcessingJob<JobState>(jobId, (row) => {
+      handleJobUpdate(row);
+    });
 
     const tick = async () => {
       const res = await fetch(`/api/jobs/${jobId}`);
       if (!res.ok) return;
       const data = (await res.json()) as JobState;
-      setJobState(data);
-
-      if (data.status === "completed") {
-        if (pollRef.current) window.clearInterval(pollRef.current);
-        setPhase("done");
-        const cloze = data.result?.cloze_count ?? 0;
-        const open = data.result?.open_count ?? 0;
-        toast.success("Materiał zaimportowany", {
-          description: `${cloze} fiszek + ${open} pytań otwartych.`,
-        });
-        const materialId = data.result?.material_id;
-        if (materialId) {
-          setTimeout(() => router.push(`/materials/${materialId}`), 1200);
-        }
-      } else if (data.status === "failed") {
-        if (pollRef.current) window.clearInterval(pollRef.current);
-        const msg = data.error ?? "Pipeline nie zakończył się sukcesem.";
-        setPhase("error");
-        setErrorMessage(msg);
-        toast.error("Import nie powiódł się", { description: msg });
-      }
+      handleJobUpdate(data);
     };
-
     void tick();
-    pollRef.current = window.setInterval(tick, 1500);
+    pollRef.current = window.setInterval(tick, 5000);
   }
 
   return (
