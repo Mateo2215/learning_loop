@@ -2,6 +2,8 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Toaster } from "sonner";
 import { ThemeProvider, THEME_INIT_SCRIPT } from "@/lib/theme/provider";
+import { SwRegister } from "@/components/shared/sw-register";
+import { InstallPrompt } from "@/components/shared/install-prompt";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -63,6 +65,8 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col">
         <ThemeProvider>
           {children}
+          <SwRegister />
+          <InstallPrompt />
           <Toaster position="top-right" richColors closeButton />
         </ThemeProvider>
       </body>
