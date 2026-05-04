@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Textarea } from "@/components/ui/textarea";
+import { AnswerInput } from "@/components/sessions/answer-input";
 
 interface OpenItem {
   id: string;
@@ -204,50 +204,53 @@ export default function DeepDivePage({ params }: { params: Promise<{ material_id
   if (!current) return null;
 
   return (
-    <div className="max-w-2xl mx-auto px-4 py-8">
-      <div className="flex items-center justify-between mb-4 text-xs text-zinc-500 dark:text-zinc-400">
+    <div className="min-h-[100dvh] flex flex-col max-w-2xl mx-auto px-4 pt-6 pb-[calc(env(safe-area-inset-bottom)+1rem)]">
+      <div className="flex items-center justify-between mb-3 text-xs text-zinc-500 dark:text-zinc-400">
         <span>{index + 1} / {items.length}</span>
         <span>Pytanie otwarte</span>
       </div>
 
       <Card className="mb-4">
         <CardHeader>
-          <CardTitle className="text-base font-normal leading-relaxed">
+          <CardTitle className="text-base sm:text-lg font-normal leading-relaxed">
             {current.question}
           </CardTitle>
         </CardHeader>
       </Card>
 
       {(phase === "answering" || phase === "validating") && (
-        <div className="space-y-3">
-          <Textarea
-            rows={6}
-            placeholder="Wpisz swoją odpowiedź…"
+        <div className="flex-1 flex flex-col gap-3">
+          <AnswerInput
             value={userAnswer}
-            onChange={(e) => setUserAnswer(e.target.value)}
+            onChange={setUserAnswer}
             disabled={phase === "validating"}
             autoFocus
+            rows={6}
           />
-          <Button
-            onClick={submitAnswer}
-            disabled={phase === "validating" || userAnswer.trim().length < 3}
-            className="w-full h-12"
-          >
-            {phase === "validating" ? "AI ocenia…" : "Wyślij odpowiedź"}
-          </Button>
+          <div className="mt-auto sticky bottom-0 pt-2">
+            <Button
+              onClick={submitAnswer}
+              disabled={phase === "validating" || userAnswer.trim().length < 3}
+              className="w-full min-h-14 text-base"
+            >
+              {phase === "validating" ? "AI ocenia…" : "Wyślij odpowiedź"}
+            </Button>
+          </div>
         </div>
       )}
 
       {phase === "feedback" && feedback && (
-        <div className="space-y-4">
+        <div className="flex-1 flex flex-col gap-4">
           <FeedbackCard feedback={feedback} userAnswer={userAnswer} reference={current.answer_reference} />
           <CalibrationButtons
             picked={calibrationPicked}
             onPick={(c) => void submitCalibration(c)}
           />
-          <Button onClick={() => void goNext()} className="w-full h-12">
-            Następne pytanie →
-          </Button>
+          <div className="mt-auto sticky bottom-0 pt-2">
+            <Button onClick={() => void goNext()} className="w-full min-h-14 text-base">
+              Następne pytanie →
+            </Button>
+          </div>
         </div>
       )}
     </div>

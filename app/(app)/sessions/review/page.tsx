@@ -195,8 +195,8 @@ export default function ReviewSessionPage() {
   const cloze = current.cloze_data;
 
   return (
-    <div className="max-w-2xl mx-auto px-4 py-8">
-      <div className="flex items-center justify-between mb-4 text-xs text-zinc-500 dark:text-zinc-400">
+    <div className="min-h-[100dvh] flex flex-col max-w-2xl mx-auto px-4 pt-6 pb-[calc(env(safe-area-inset-bottom)+1rem)]">
+      <div className="flex items-center justify-between mb-3 text-xs text-zinc-500 dark:text-zinc-400">
         <span>{index + 1} / {items.length}</span>
         <span className="flex items-center gap-2">
           {current.is_leech && (
@@ -211,35 +211,37 @@ export default function ReviewSessionPage() {
         </span>
       </div>
 
-      <Card className="mb-6">
-        <CardHeader>
-          <CardTitle className="text-base font-normal leading-relaxed whitespace-pre-wrap">
+      <Card className="flex-1 flex flex-col justify-center">
+        <CardHeader className="flex-1 flex flex-col justify-center">
+          <CardTitle className="text-lg sm:text-xl font-normal leading-relaxed whitespace-pre-wrap text-center">
             {phase === "revealed" && cloze
               ? cloze.front.replace(/\{\{c1::([^}]+)\}\}/g, "$1")
               : current.question.replace(/\{\{c1::([^}]+)\}\}/g, "______")}
           </CardTitle>
           {phase === "revealed" && cloze && (
-            <CardDescription className="mt-3 text-emerald-700 dark:text-emerald-300 font-medium">
+            <CardDescription className="mt-4 text-center text-emerald-700 dark:text-emerald-300 font-medium text-base">
               Odpowiedź: {cloze.answer}
             </CardDescription>
           )}
         </CardHeader>
       </Card>
 
-      {phase === "answering" && (
-        <Button className="w-full h-14 text-base" onClick={() => setPhase("revealed")}>
-          Pokaż odpowiedź <span className="ml-3 text-xs opacity-60">(spacja)</span>
-        </Button>
-      )}
+      <div className="mt-4 sticky bottom-0">
+        {phase === "answering" && (
+          <Button className="w-full min-h-14 text-base" onClick={() => setPhase("revealed")}>
+            Pokaż odpowiedź <span className="ml-3 text-xs opacity-60 hidden sm:inline">(spacja)</span>
+          </Button>
+        )}
 
-      {phase === "revealed" && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-          <RatingButton label="Again" hint="1" variant="destructive" onClick={() => submitRating(1)} />
-          <RatingButton label="Hard" hint="2" variant="outline" onClick={() => submitRating(2)} />
-          <RatingButton label="Good" hint="3" variant="default" onClick={() => submitRating(3)} />
-          <RatingButton label="Easy" hint="4" variant="secondary" onClick={() => submitRating(4)} />
-        </div>
-      )}
+        {phase === "revealed" && (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <RatingButton label="Again" hint="1" variant="destructive" onClick={() => submitRating(1)} />
+            <RatingButton label="Hard" hint="2" variant="outline" onClick={() => submitRating(2)} />
+            <RatingButton label="Good" hint="3" variant="default" onClick={() => submitRating(3)} />
+            <RatingButton label="Easy" hint="4" variant="secondary" onClick={() => submitRating(4)} />
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -256,7 +258,7 @@ function RatingButton({
   variant: "default" | "destructive" | "outline" | "secondary";
 }) {
   return (
-    <Button onClick={onClick} variant={variant} className="h-14 flex flex-col gap-0.5 text-sm">
+    <Button onClick={onClick} variant={variant} className="min-h-14 flex flex-col gap-0.5 text-sm">
       <span>{label}</span>
       <span className="text-xs opacity-60">{hint}</span>
     </Button>
