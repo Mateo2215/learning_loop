@@ -2,10 +2,12 @@ import Link from "next/link";
 import { redirect, notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { CATEGORY_LABELS, type Item, type Material } from "@/lib/db/types";
-import { ItemListClient, type EditableItem } from "./item-list-client";
+import { type EditableItem } from "./item-list-client";
+import { ItemsTabs } from "./items-tabs";
 import { GapLinkBanner } from "./gap-link-banner";
+import { Tag } from "@/components/shared/tag";
+import { StatusPill } from "@/components/shared/status-pill";
 
 export default async function MaterialDetailPage({
   params,
@@ -66,57 +68,41 @@ export default async function MaterialDetailPage({
         />
       )}
 
-      <Card className="mb-6">
-          <CardHeader>
-            <CardTitle>{m.title}</CardTitle>
-            <CardDescription>
-              {CATEGORY_LABELS[m.category]} • {formatDate(m.imported_at)} •{" "}
-              {m.status === "ready" ? "Gotowy" : m.status === "processing" ? "W trakcie…" : "Błąd"}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {m.tags && m.tags.length > 0 && (
-              <div className="flex flex-wrap gap-1 mb-4">
-                {m.tags.map((t) => (
-                  <span key={t} className="text-xs px-2 py-0.5 rounded-full bg-zinc-100 dark:bg-zinc-900">
-                    {t}
-                  </span>
-                ))}
-              </div>
-            )}
-            {m.content_compressed ? (
-              <div className="text-sm whitespace-pre-wrap text-zinc-700 dark:text-zinc-300">
-                {m.content_compressed}
-              </div>
-            ) : (
-              <p className="text-sm text-zinc-500">Treść jeszcze nie jest gotowa.</p>
-            )}
-          </CardContent>
-        </Card>
+      <header className="mb-6">
+        <h1 className="font-serif text-3xl sm:text-4xl font-medium leading-tight tracking-tight">
+          {m.title}
+        </h1>
+        <div className="mt-2 text-sm text-muted font-mono flex items-center gap-2 flex-wrap">
+          <span>{CATEGORY_LABELS[m.category]}</span>
+          <span>·</span>
+          <span>{formatDate(m.imported_at)}</span>
+          {m.status !== "ready" && (
+            <>
+              <span>·</span>
+              <StatusPill variant={m.status === "processing" ? "processing" : "failed"}>
+                {m.status === "processing" ? "W trakcie" : "Błąd"}
+              </StatusPill>
+            </>
+          )}
+        </div>
+        {m.tags && m.tags.length > 0 && (
+          <div className="flex flex-wrap gap-1 mt-3">
+            {m.tags.map((t) => (
+              <Tag key={t}>{t}</Tag>
+            ))}
+          </div>
+        )}
+      </header>
 
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle>Fiszki ({clozeItems.length})</CardTitle>
-            <CardDescription>Pytania typu cloze do sesji Review.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ItemListClient items={clozeItems} emptyLabel="Brak fiszek." />
-          </CardContent>
-        </Card>
+      {m.content_compressed ? (
+        <article className="text-sm whitespace-pre-wrap text-subtle leading-relaxed border-y border-line py-5 max-h-[28rem] overflow-y-auto">
+          {m.content_compressed}
+        </article>
+      ) : (
+        <p className="text-sm text-muted">Treść jeszcze nie jest gotowa.</p>
+      )}
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Pytania otwarte ({openItems.length})</CardTitle>
-            <CardDescription>Pytania na sesje Deep Dive.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ItemListClient
-              items={openItems}
-              emptyLabel="Brak pytań otwartych."
-              showReferenceLabel="Wzorzec"
-            />
-          </CardContent>
-        </Card>
+      <ItemsTabs cloze={clozeItems} open={openItems} />
     </div>
   );
 }

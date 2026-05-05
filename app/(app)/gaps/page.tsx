@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { GapsClient } from "./gaps-client";
 import type { KnowledgeGap } from "@/lib/db/types";
+import { PageHeader } from "@/components/shared/page-header";
 
 export default async function GapsPage() {
   const supabase = await createClient();
@@ -18,10 +19,17 @@ export default async function GapsPage() {
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-8">
-      <h1 className="text-2xl font-semibold mb-2">Luki wiedzy</h1>
-      <p className="text-sm text-zinc-600 dark:text-zinc-400 mb-6">
-        AI analizuje Twoje powtórki i wskazuje obszary, które wymagają uzupełnienia.
-      </p>
+      <PageHeader
+        title={
+          <>
+            Luki wiedzy
+            <span className="text-muted font-mono text-base ml-3 align-middle">
+              · {gaps?.length ?? 0}
+            </span>
+          </>
+        }
+        description="AI analizuje Twoje powtórki i wskazuje obszary, które wymagają uzupełnienia."
+      />
       <GapsClient initialGaps={(gaps ?? []) as KnowledgeGap[]} />
     </div>
   );

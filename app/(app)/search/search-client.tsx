@@ -82,7 +82,7 @@ export function SearchClient({ availableTags }: { availableTags: string[] }) {
           />
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
             <select
-              className="h-9 rounded-md border border-zinc-200 dark:border-zinc-800 bg-transparent px-3 text-sm"
+              className="h-9 rounded-md border border-line bg-transparent px-3 text-sm"
               value={category}
               onChange={(e) => setCategory(e.target.value as Category | "")}
             >
@@ -94,7 +94,7 @@ export function SearchClient({ availableTags }: { availableTags: string[] }) {
               ))}
             </select>
             <select
-              className="h-9 rounded-md border border-zinc-200 dark:border-zinc-800 bg-transparent px-3 text-sm"
+              className="h-9 rounded-md border border-line bg-transparent px-3 text-sm"
               value={tag}
               onChange={(e) => setTag(e.target.value)}
               disabled={availableTags.length === 0}
@@ -107,7 +107,7 @@ export function SearchClient({ availableTags }: { availableTags: string[] }) {
               ))}
             </select>
             <select
-              className="h-9 rounded-md border border-zinc-200 dark:border-zinc-800 bg-transparent px-3 text-sm"
+              className="h-9 rounded-md border border-line bg-transparent px-3 text-sm"
               value={status}
               onChange={(e) => setStatus(e.target.value as typeof status)}
             >
@@ -129,7 +129,7 @@ export function SearchClient({ availableTags }: { availableTags: string[] }) {
         </CardContent>
       </Card>
 
-      {loading && <p className="text-sm text-zinc-500">Szukam…</p>}
+      {loading && <p className="text-sm text-muted">Szukam…</p>}
 
       {!loading && hasSearched && results.length === 0 && (
         <Card>
@@ -159,7 +159,7 @@ export function SearchClient({ availableTags }: { availableTags: string[] }) {
               {(r.snippet || (r.tags && r.tags.length > 0)) && (
                 <CardContent className="space-y-2 text-sm">
                   {r.snippet && (
-                    <p className="text-zinc-700 dark:text-zinc-300 whitespace-pre-wrap">
+                    <p className="text-subtle whitespace-pre-wrap">
                       {r.snippet}
                     </p>
                   )}
@@ -168,7 +168,7 @@ export function SearchClient({ availableTags }: { availableTags: string[] }) {
                       {r.tags.map((t) => (
                         <span
                           key={t}
-                          className="text-xs px-2 py-0.5 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300"
+                          className="text-xs px-2 py-0.5 rounded-md bg-elevated text-muted"
                         >
                           {t}
                         </span>

@@ -5,8 +5,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import type { GapSeverity, GapType, KnowledgeGap } from "@/lib/db/types";
+import { EmptyState } from "@/components/shared/empty-state";
+import { Tag } from "@/components/shared/tag";
+import { StatusPill } from "@/components/shared/status-pill";
 
 const GAP_TYPE_LABEL: Record<GapType, string> = {
   low_correct_rate: "Niski correct rate",
@@ -15,16 +17,22 @@ const GAP_TYPE_LABEL: Record<GapType, string> = {
   never_consolidated: "Brak utrwalenia",
 };
 
-const SEVERITY_STYLE: Record<GapSeverity, string> = {
-  high: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300",
-  medium: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300",
-  low: "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300",
+const SEVERITY_BORDER: Record<GapSeverity, string> = {
+  high: "border-l-[3px] border-l-bad",
+  medium: "border-l-[3px] border-l-warn",
+  low: "border-l-[3px] border-l-line",
 };
 
 const SEVERITY_LABEL: Record<GapSeverity, string> = {
-  high: "Wysoki priorytet",
-  medium: "Średni priorytet",
-  low: "Niski priorytet",
+  high: "Wysoki",
+  medium: "Średni",
+  low: "Niski",
+};
+
+const SEVERITY_VARIANT: Record<GapSeverity, "severity-high" | "severity-mid" | "severity-low"> = {
+  high: "severity-high",
+  medium: "severity-mid",
+  low: "severity-low",
 };
 
 export function GapsClient({ initialGaps }: { initialGaps: KnowledgeGap[] }) {
@@ -79,61 +87,49 @@ export function GapsClient({ initialGaps }: { initialGaps: KnowledgeGap[] }) {
       </div>
 
       {gaps.length === 0 ? (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Brak otwartych luk</CardTitle>
-            <CardDescription>
-              Kliknij &ldquo;Wykryj luki teraz&rdquo; aby uruchomić analizę. Zwykle warto raz w tygodniu.
-            </CardDescription>
-          </CardHeader>
-        </Card>
+        <EmptyState
+          title="Brak otwartych luk"
+          description='Kliknij "Wykryj luki teraz", aby uruchomić analizę. Zwykle warto raz w tygodniu.'
+        />
       ) : (
-        <div className="space-y-3">
+        <ul className="space-y-3">
           {gaps.map((g) => (
-            <Card key={g.id}>
-              <CardHeader>
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex-1">
-                    <CardTitle className="text-base">
-                      {g.title ?? GAP_TYPE_LABEL[g.gap_type]}
-                    </CardTitle>
-                    <CardDescription className="mt-1">
-                      {GAP_TYPE_LABEL[g.gap_type]} · wykryto{" "}
-                      {new Date(g.detected_at).toLocaleDateString("pl-PL")}
-                    </CardDescription>
-                  </div>
-                  <span
-                    className={`text-[10px] uppercase tracking-wide px-2 py-0.5 rounded ${SEVERITY_STYLE[g.severity]}`}
-                  >
-                    {SEVERITY_LABEL[g.severity]}
-                  </span>
+            <li
+              key={g.id}
+              className={`bg-surface border border-line rounded-lg pl-4 pr-5 py-4 ${SEVERITY_BORDER[g.severity]}`}
+            >
+              <div className="flex items-start justify-between gap-3 mb-2">
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-serif text-lg font-medium leading-tight">
+                    {g.title ?? GAP_TYPE_LABEL[g.gap_type]}
+                  </h3>
+                  <p className="text-xs text-muted font-mono mt-0.5">
+                    {GAP_TYPE_LABEL[g.gap_type]} · wykryto{" "}
+                    {new Date(g.detected_at).toLocaleDateString("pl-PL")}
+                  </p>
                 </div>
-              </CardHeader>
-              <CardContent className="space-y-3 text-sm">
-                {g.affected_tags.length > 0 && (
-                  <div className="flex flex-wrap gap-1">
-                    {g.affected_tags.map((t) => (
-                      <span
-                        key={t}
-                        className="px-2 py-0.5 text-xs rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300"
-                      >
-                        {t}
-                      </span>
-                    ))}
-                  </div>
-                )}
-                <div className="flex justify-end gap-2">
-                  <Button variant="ghost" size="sm" onClick={() => dismissGap(g.id)}>
-                    Odrzuć
-                  </Button>
-                  <Button variant="outline" size="sm" asChild>
-                    <Link href={`/gaps/${g.id}`}>Szczegóły →</Link>
-                  </Button>
+                <StatusPill variant={SEVERITY_VARIANT[g.severity]}>
+                  {SEVERITY_LABEL[g.severity]}
+                </StatusPill>
+              </div>
+              {g.affected_tags.length > 0 && (
+                <div className="flex flex-wrap gap-1 mb-3">
+                  {g.affected_tags.map((t) => (
+                    <Tag key={t}>{t}</Tag>
+                  ))}
                 </div>
-              </CardContent>
-            </Card>
+              )}
+              <div className="flex justify-end gap-2">
+                <Button variant="ghost" size="sm" onClick={() => dismissGap(g.id)}>
+                  Odrzuć
+                </Button>
+                <Button variant="outline" size="sm" asChild>
+                  <Link href={`/gaps/${g.id}`}>Szczegóły →</Link>
+                </Button>
+              </div>
+            </li>
           ))}
-        </div>
+        </ul>
       )}
     </>
   );

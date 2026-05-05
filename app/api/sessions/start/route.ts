@@ -3,6 +3,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { prepareAudit } from "@/lib/audits/scheduler";
 import { isLeechRotationDue, pickLeechCandidates } from "@/lib/db/leeches";
+import { endActiveSessions, findActiveSession } from "@/lib/sessions/active-guard";
 import type { Item } from "@/lib/db/types";
 
 const StartBodySchema = z.object({
@@ -10,6 +11,8 @@ const StartBodySchema = z.object({
   material_id: z.string().uuid().optional(),
   audit_id: z.string().uuid().optional(),
   item_count: z.number().int().min(1).max(50).default(20),
+  device: z.enum(["desktop", "mobile"]).default("desktop"),
+  force: z.boolean().default(false),
 });
 
 /**
@@ -39,7 +42,24 @@ export async function POST(request: NextRequest) {
       { status: 400 }
     );
   }
-  const { mode, material_id, audit_id, item_count } = parsed.data;
+  const { mode, material_id, audit_id, item_count, device, force } = parsed.data;
+
+  // Cross-device guard: only one active session at a time. The client can pass
+  // force=true to end the existing one and take over (e.g. user confirms the
+  // "active session on another device" prompt).
+  const existing = await findActiveSession(supabase, user.id);
+  if (existing && !force) {
+    return NextResponse.json(
+      {
+        error: "active_session_elsewhere",
+        active_session: existing,
+      },
+      { status: 409 }
+    );
+  }
+  if (existing && force) {
+    await endActiveSessions(supabase, user.id);
+  }
 
   if (mode === "deep_dive" && !material_id) {
     return NextResponse.json(
@@ -70,7 +90,7 @@ export async function POST(request: NextRequest) {
         user_id: user.id,
         mode: "audit",
         items_planned: prepared.items.length,
-        device: "desktop",
+        device,
       })
       .select("id, started_at")
       .single();

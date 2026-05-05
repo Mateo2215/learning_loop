@@ -22,7 +22,7 @@ export default async function SearchPage() {
   return (
     <div className="max-w-3xl mx-auto px-4 py-8">
       <h1 className="text-2xl font-semibold mb-2">Szukaj</h1>
-      <p className="text-sm text-zinc-600 dark:text-zinc-400 mb-6">
+      <p className="text-sm text-muted mb-6">
         Wyszukaj w tytułach i treści swoich materiałów. Filtry sumują się z zapytaniem.
       </p>
       <SearchClient availableTags={sortedTags} />

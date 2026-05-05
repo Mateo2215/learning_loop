@@ -25,7 +25,7 @@ export function ItemListClient({
   showReferenceLabel?: string;
 }) {
   if (items.length === 0) {
-    return <p className="text-sm text-zinc-500">{emptyLabel}</p>;
+    return <p className="text-sm text-muted">{emptyLabel}</p>;
   }
   return (
     <ul className="space-y-3">
@@ -115,18 +115,18 @@ function ItemRow({
   }
 
   return (
-    <li className="text-sm border-l-2 border-zinc-300 dark:border-zinc-700 pl-3 group">
+    <li className="text-sm border-l-2 border-line-strong pl-3 group">
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1">
-          <div className="text-zinc-900 dark:text-zinc-100">{item.question}</div>
+          <div className="text-fg">{item.question}</div>
           {item.answer_reference && (
-            <div className="text-xs text-zinc-500 mt-1 italic">
+            <div className="text-xs text-muted mt-1 italic">
               {showReferenceLabel ? `${showReferenceLabel}: ` : "→ "}
               {item.answer_reference}
             </div>
           )}
           {item.edit_count > 0 && (
-            <div className="text-[10px] text-zinc-500 mt-1">
+            <div className="text-[10px] text-muted mt-1">
               edytowane {item.edit_count}×
             </div>
           )}

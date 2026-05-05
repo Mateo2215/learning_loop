@@ -89,21 +89,21 @@ export function InstallPrompt() {
   if (!deferred && !showIosHint) return null;
 
   return (
-    <div className="fixed bottom-3 left-3 right-3 sm:left-auto sm:right-3 sm:max-w-sm z-40 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 shadow-lg p-3">
+    <div className="fixed bottom-3 left-3 right-3 sm:left-auto sm:right-3 sm:max-w-sm z-40 rounded-lg border border-line bg-surface shadow-lg p-3">
       <div className="flex items-start gap-3">
-        <Download className="h-5 w-5 mt-0.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+        <Download className="h-5 w-5 mt-0.5 text-accent shrink-0" />
         <div className="flex-1 text-sm">
           {deferred ? (
             <>
               <div className="font-medium">Zainstaluj Learning Loop</div>
-              <div className="text-xs text-zinc-600 dark:text-zinc-400 mt-0.5">
+              <div className="text-xs text-muted mt-0.5">
                 Działa offline, otwiera się jak natywna aplikacja.
               </div>
             </>
           ) : (
             <>
               <div className="font-medium">Dodaj do ekranu domowego</div>
-              <div className="text-xs text-zinc-600 dark:text-zinc-400 mt-0.5">
+              <div className="text-xs text-muted mt-0.5">
                 Tap <span className="font-mono">Udostępnij</span> →{" "}
                 <span className="font-mono">Do ekranu początkowego</span>.
               </div>

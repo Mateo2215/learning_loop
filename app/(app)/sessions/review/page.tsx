@@ -4,8 +4,12 @@ import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { queueReview } from "@/lib/offline/queue";
+import { startSession, type ActiveSessionInfo } from "@/lib/sessions/start-client";
+import { ActiveSessionPrompt } from "@/components/sessions/active-session-prompt";
+import { ScreenMessage } from "@/components/sessions/screen-message";
+import { SessionShell } from "@/components/sessions/session-shell";
+import { cn } from "@/lib/utils";
 
 interface ReviewItem {
   id: string;
@@ -25,7 +29,7 @@ interface SessionStartResponse {
   items: ReviewItem[];
 }
 
-type Phase = "loading" | "empty" | "answering" | "revealed" | "done" | "error";
+type Phase = "loading" | "empty" | "conflict" | "answering" | "revealed" | "done" | "error";
 
 export default function ReviewSessionPage() {
   const router = useRouter();
@@ -36,48 +40,39 @@ export default function ReviewSessionPage() {
   const [index, setIndex] = useState(0);
   const [answeredCount, setAnsweredCount] = useState(0);
   const [questionShownAt, setQuestionShownAt] = useState<number>(0);
+  const [activeConflict, setActiveConflict] = useState<ActiveSessionInfo | null>(null);
+  const [takingOver, setTakingOver] = useState(false);
 
-  // Start session on mount.
-  useEffect(() => {
-    let active = true;
-    (async () => {
-      try {
-        const res = await fetch("/api/sessions/start", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ mode: "review", item_count: 20 }),
-        });
-
-        if (!active) return;
-
-        if (res.status === 404) {
-          setPhase("empty");
-          return;
-        }
-        if (!res.ok) {
-          const body = await res.json().catch(() => ({}));
-          setPhase("error");
-          setErrorMessage(body.error ?? `HTTP ${res.status}`);
-          return;
-        }
-
-        const data = (await res.json()) as SessionStartResponse;
-        setSessionId(data.session_id);
-        setItems(data.items);
-        setIndex(0);
-        setAnsweredCount(0);
-        setQuestionShownAt(Date.now());
-        setPhase(data.items.length === 0 ? "empty" : "answering");
-      } catch {
-        if (!active) return;
-        setPhase("error");
-        setErrorMessage("Błąd sieci.");
-      }
-    })();
-    return () => {
-      active = false;
-    };
+  const startReview = useCallback(async (force: boolean) => {
+    setPhase("loading");
+    const result = await startSession<SessionStartResponse>({ mode: "review", item_count: 20, force });
+    if (result.kind === "conflict") {
+      setActiveConflict(result.active);
+      setPhase("conflict");
+      return;
+    }
+    if (result.kind === "empty") {
+      setPhase("empty");
+      return;
+    }
+    if (result.kind === "error") {
+      setPhase("error");
+      setErrorMessage(result.message);
+      return;
+    }
+    const data = result.data;
+    setActiveConflict(null);
+    setSessionId(data.session_id);
+    setItems(data.items);
+    setIndex(0);
+    setAnsweredCount(0);
+    setQuestionShownAt(Date.now());
+    setPhase(data.items.length === 0 ? "empty" : "answering");
   }, []);
+
+  useEffect(() => {
+    void startReview(false);
+  }, [startReview]);
 
   const submitRating = useCallback(
     (rating: 1 | 2 | 3 | 4) => {
@@ -181,6 +176,23 @@ export default function ReviewSessionPage() {
     return <ScreenMessage title="Wczytuję sesję…" />;
   }
 
+  if (phase === "conflict" && activeConflict) {
+    return (
+      <div className="max-w-2xl mx-auto px-4 py-8">
+        <ActiveSessionPrompt
+          active={activeConflict}
+          takingOver={takingOver}
+          onTakeOver={async () => {
+            setTakingOver(true);
+            await startReview(true);
+            setTakingOver(false);
+          }}
+          onCancel={() => router.push("/dashboard")}
+        />
+      </div>
+    );
+  }
+
   if (phase === "empty") {
     return (
       <ScreenMessage
@@ -225,95 +237,95 @@ export default function ReviewSessionPage() {
   if (!current) return null;
   const cloze = current.cloze_data;
 
+  const progress = items.length === 0 ? 0 : Math.round((answeredCount / items.length) * 100);
+
+  const meta = (
+    <>
+      <span className="font-mono">{index + 1} / {items.length}</span>
+      <span className="flex items-center gap-2">
+        {current.is_leech && (
+          <span
+            className="inline-flex items-center gap-1 text-warn"
+            title="Fiszka, której nie zapamiętujesz — wraca w rotacji co 7 dni."
+          >
+            <span className="h-2 w-2 rounded-full bg-warn" />
+            leech
+          </span>
+        )}
+        <span>{current.fsrs_review_count === 0 ? "Nowa" : `#${current.fsrs_review_count + 1}`}</span>
+      </span>
+    </>
+  );
+
+  const questionText = current.question.replace(/\{\{c1::([^}]+)\}\}/g, "______");
+  const revealedText = cloze ? cloze.front.replace(/\{\{c1::([^}]+)\}\}/g, "$1") : current.question;
+
   return (
-    <div className="min-h-[100dvh] flex flex-col max-w-2xl mx-auto px-4 pt-6 pb-[calc(env(safe-area-inset-bottom)+1rem)]">
-      <div className="flex items-center justify-between mb-3 text-xs text-zinc-500 dark:text-zinc-400">
-        <span>{index + 1} / {items.length}</span>
-        <span className="flex items-center gap-2">
-          {current.is_leech && (
-            <span
-              className="px-1.5 py-0.5 rounded text-[10px] uppercase tracking-wide bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
-              title="Fiszka, której nie zapamiętujesz — wraca w rotacji co 7 dni."
-            >
-              leech
-            </span>
-          )}
-          <span>{current.fsrs_review_count === 0 ? "Nowa fiszka" : `Powtórka #${current.fsrs_review_count + 1}`}</span>
-        </span>
-      </div>
-
-      <Card className="flex-1 flex flex-col justify-center">
-        <CardHeader className="flex-1 flex flex-col justify-center">
-          <CardTitle className="text-lg sm:text-xl font-normal leading-relaxed whitespace-pre-wrap text-center">
-            {phase === "revealed" && cloze
-              ? cloze.front.replace(/\{\{c1::([^}]+)\}\}/g, "$1")
-              : current.question.replace(/\{\{c1::([^}]+)\}\}/g, "______")}
-          </CardTitle>
-          {phase === "revealed" && cloze && (
-            <CardDescription className="mt-4 text-center text-emerald-700 dark:text-emerald-300 font-medium text-base">
-              Odpowiedź: {cloze.answer}
-            </CardDescription>
-          )}
-        </CardHeader>
-      </Card>
-
-      <div className="mt-4 sticky bottom-0">
-        {phase === "answering" && (
+    <SessionShell
+      progress={progress}
+      meta={meta}
+      hint={phase === "answering" ? "spacja = pokaż odpowiedź" : "1–4 = oceń"}
+      bottom={
+        phase === "answering" ? (
           <Button className="w-full min-h-14 text-base" onClick={() => setPhase("revealed")}>
-            Pokaż odpowiedź <span className="ml-3 text-xs opacity-60 hidden sm:inline">(spacja)</span>
+            Pokaż odpowiedź
           </Button>
-        )}
-
-        {phase === "revealed" && (
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-            <RatingButton label="Again" hint="1" variant="destructive" onClick={() => submitRating(1)} />
-            <RatingButton label="Hard" hint="2" variant="outline" onClick={() => submitRating(2)} />
-            <RatingButton label="Good" hint="3" variant="default" onClick={() => submitRating(3)} />
-            <RatingButton label="Easy" hint="4" variant="secondary" onClick={() => submitRating(4)} />
+        ) : (
+          <div className="grid grid-cols-4 gap-2">
+            <RatingButton digit={1} label="Again" tone="bad" onClick={() => submitRating(1)} />
+            <RatingButton digit={2} label="Hard" tone="warn" onClick={() => submitRating(2)} />
+            <RatingButton digit={3} label="Good" tone="ok" onClick={() => submitRating(3)} />
+            <RatingButton digit={4} label="Easy" tone="accent" onClick={() => submitRating(4)} />
           </div>
-        )}
-      </div>
-    </div>
+        )
+      }
+    >
+      <p className="font-serif text-2xl sm:text-4xl font-normal leading-tight tracking-tight text-center whitespace-pre-wrap">
+        {phase === "revealed" ? revealedText : questionText}
+      </p>
+      {phase === "revealed" && cloze && (
+        <div className="mt-8 mx-auto max-w-md border-t border-line pt-6">
+          <div className="text-[10px] uppercase tracking-widest text-muted mb-2 text-center">
+            Odpowiedź
+          </div>
+          <div className="font-mono text-base text-center bg-elevated px-4 py-3 rounded-lg text-fg">
+            {cloze.answer}
+          </div>
+        </div>
+      )}
+    </SessionShell>
   );
 }
 
 function RatingButton({
+  digit,
   label,
-  hint,
+  tone,
   onClick,
-  variant,
 }: {
+  digit: number;
   label: string;
-  hint: string;
+  tone: "bad" | "warn" | "ok" | "accent";
   onClick: () => void;
-  variant: "default" | "destructive" | "outline" | "secondary";
 }) {
-  return (
-    <Button onClick={onClick} variant={variant} className="min-h-14 flex flex-col gap-0.5 text-sm">
-      <span>{label}</span>
-      <span className="text-xs opacity-60">{hint}</span>
-    </Button>
-  );
-}
+  const toneClass = {
+    bad: "border-bad/40 hover:bg-bad/10 hover:border-bad",
+    warn: "border-warn/40 hover:bg-warn/10 hover:border-warn",
+    ok: "border-ok/40 hover:bg-ok/10 hover:border-ok",
+    accent: "border-accent/40 hover:bg-accent/10 hover:border-accent",
+  }[tone];
 
-function ScreenMessage({
-  title,
-  description,
-  action,
-}: {
-  title: string;
-  description?: string;
-  action?: React.ReactNode;
-}) {
   return (
-    <div className="max-w-xl mx-auto px-4 py-12">
-      <Card>
-        <CardHeader>
-          <CardTitle>{title}</CardTitle>
-          {description && <CardDescription>{description}</CardDescription>}
-        </CardHeader>
-        {action && <CardContent>{action}</CardContent>}
-      </Card>
-    </div>
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "min-h-16 rounded-lg border bg-surface flex flex-col items-center justify-center gap-0.5 transition-colors",
+        toneClass
+      )}
+    >
+      <span className="font-serif text-2xl leading-none">{digit}</span>
+      <span className="text-[10px] uppercase tracking-wide text-muted">{label}</span>
+    </button>
   );
 }

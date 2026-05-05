@@ -19,7 +19,7 @@ export function ThemeSection() {
         <div className="flex items-center justify-between gap-3">
           <div>
             <div className="font-medium">Wybór motywu</div>
-            <div className="text-xs text-zinc-500 dark:text-zinc-400">
+            <div className="text-xs text-muted">
               aktualnie aktywny: <span className="font-mono">{resolvedTheme}</span>{" "}
               ({theme === "system" ? "z systemu" : "wymuszony"})
             </div>
@@ -29,14 +29,14 @@ export function ThemeSection() {
         <label className="flex items-start gap-3 cursor-pointer">
           <input
             type="checkbox"
-            className="mt-1 h-4 w-4 rounded border-zinc-300 dark:border-zinc-700"
+            className="mt-1 h-4 w-4 rounded border-line-strong"
             checked={autoSwitchEnabled}
             onChange={(e) => setAutoSwitchEnabled(e.target.checked)}
             disabled={theme !== "system"}
           />
           <span>
             <span className="font-medium">Auto-switch na ciemny po 19:00</span>
-            <span className="block text-xs text-zinc-500 dark:text-zinc-400">
+            <span className="block text-xs text-muted">
               Aktywne tylko gdy motyw jest ustawiony na &ldquo;systemowy&rdquo;. Wymusza ciemny
               tryb między 19:00 a 6:00 niezależnie od preferencji systemu.
             </span>

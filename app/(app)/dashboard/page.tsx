@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { Plus } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { Button } from "@/components/ui/button";
-import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { FreshMaterials } from "@/components/dashboard/fresh-materials";
+import { StatTile } from "@/components/shared/stat-tile";
 
 export default async function DashboardPage() {
   const supabase = await createClient();
@@ -55,64 +57,61 @@ export default async function DashboardPage() {
   );
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-8">
-      <h1 className="text-2xl font-semibold mb-6">Dashboard</h1>
+    <>
+      <div className="max-w-4xl mx-auto px-4 py-8">
+        <h1 className="font-serif text-3xl sm:text-4xl font-medium leading-tight tracking-tight mb-8">
+          Dziś
+        </h1>
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-6">
-        <Tile value={dueCount ?? 0} label="due cards" emphasize={(dueCount ?? 0) > 0} />
-        <Tile value={auditsDueCount ?? 0} label="audyty due" emphasize={(auditsDueCount ?? 0) > 0} />
-        <Tile value={openGapsCount ?? 0} label="otwarte luki" emphasize={(openGapsCount ?? 0) > 0} />
-        <Tile value={materialsCount ?? 0} label="materiałów" />
-        <Tile value={itemsCount ?? 0} label="pytań i fiszek" />
-        <Tile value={formatUsd(monthCost)} label="koszt miesiąca" mono />
+        <FreshMaterials />
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
+          <StatTile
+            value={dueCount ?? 0}
+            label="fiszek do powtórki"
+            emphasize={(dueCount ?? 0) > 0}
+            href="/sessions/review"
+          />
+          <StatTile
+            value={auditsDueCount ?? 0}
+            label="audytów na dziś"
+            emphasize={(auditsDueCount ?? 0) > 0}
+            href="/sessions/audit"
+          />
+          <StatTile
+            value={openGapsCount ?? 0}
+            label="otwartych luk"
+            emphasize={(openGapsCount ?? 0) > 0}
+            href="/gaps"
+          />
+        </div>
+
+        <p className="text-xs text-muted font-mono">
+          {materialsCount ?? 0} materiałów · {itemsCount ?? 0} pytań · {formatUsd(monthCost)} koszt miesiąca
+        </p>
+
+        <div className="mt-8 hidden md:flex gap-3">
+          <Button asChild>
+            <Link href="/materials/import">+ Nowy materiał</Link>
+          </Button>
+          <Button variant="outline" asChild>
+            <Link href="/sessions/deep-dive">Deep Dive</Link>
+          </Button>
+          <Button variant="outline" asChild>
+            <Link href="/materials">Materiały</Link>
+          </Button>
+        </div>
       </div>
 
-      <div className="flex flex-wrap gap-3">
-        <Button asChild>
-          <Link href="/sessions/review">Zacznij Review →</Link>
-        </Button>
-        <Button variant="outline" asChild>
-          <Link href="/sessions/deep-dive">Deep Dive</Link>
-        </Button>
-        {(auditsDueCount ?? 0) > 0 && (
-          <Button variant="outline" asChild>
-            <Link href="/sessions/audit">Audyty ({auditsDueCount})</Link>
-          </Button>
-        )}
-        {(openGapsCount ?? 0) > 0 && (
-          <Button variant="outline" asChild>
-            <Link href="/gaps">Luki ({openGapsCount})</Link>
-          </Button>
-        )}
-        <Button variant="outline" asChild>
-          <Link href="/materials/import">+ Nowy materiał</Link>
-        </Button>
-        <Button variant="outline" asChild>
-          <Link href="/materials">Materiały</Link>
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-function Tile({
-  value,
-  label,
-  emphasize = false,
-  mono = false,
-}: {
-  value: number | string;
-  label: string;
-  emphasize?: boolean;
-  mono?: boolean;
-}) {
-  return (
-    <Card className={emphasize ? "border-emerald-500" : undefined}>
-      <CardHeader>
-        <CardTitle className={`text-2xl ${mono ? "font-mono" : ""}`}>{value}</CardTitle>
-        <CardDescription>{label}</CardDescription>
-      </CardHeader>
-    </Card>
+      {/* Mobile FAB — primary action: nowy materiał. */}
+      <Link
+        href="/materials/import"
+        className="md:hidden fixed bottom-20 right-4 z-30 inline-flex items-center justify-center h-14 w-14 rounded-full bg-accent text-accent-fg shadow-lg hover:bg-accent/90 transition-colors"
+        aria-label="Nowy materiał"
+      >
+        <Plus className="h-6 w-6" />
+      </Link>
+    </>
   );
 }
 

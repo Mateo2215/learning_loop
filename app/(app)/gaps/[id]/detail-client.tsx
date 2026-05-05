@@ -17,9 +17,9 @@ const GAP_TYPE_LABEL: Record<GapType, string> = {
 };
 
 const SEVERITY_STYLE: Record<GapSeverity, string> = {
-  high: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300",
-  medium: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300",
-  low: "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300",
+  high: "bg-bad/15 text-bad",
+  medium: "bg-warn/15 text-warn",
+  low: "bg-elevated text-muted",
 };
 
 const SEVERITY_LABEL: Record<GapSeverity, string> = {
@@ -87,7 +87,7 @@ export function GapDetailClient({
   return (
     <div className="max-w-3xl mx-auto px-4 py-8">
       <div className="mb-4 text-sm">
-        <Link href="/gaps" className="text-zinc-500 hover:underline">
+        <Link href="/gaps" className="text-muted hover:underline">
           ← Wszystkie luki
         </Link>
       </div>
@@ -110,10 +110,10 @@ export function GapDetailClient({
         <CardContent className="space-y-4 text-sm">
           {gap.affected_tags.length > 0 && (
             <div>
-              <div className="text-xs uppercase tracking-wide text-zinc-500 mb-2">Tagi</div>
+              <div className="text-xs uppercase tracking-wide text-muted mb-2">Tagi</div>
               <div className="flex flex-wrap gap-1">
                 {gap.affected_tags.map((t) => (
-                  <span key={t} className="px-2 py-0.5 text-xs rounded bg-zinc-100 dark:bg-zinc-800">
+                  <span key={t} className="px-2 py-0.5 text-xs rounded-md bg-elevated text-muted">
                     {t}
                   </span>
                 ))}
@@ -122,8 +122,8 @@ export function GapDetailClient({
           )}
           {materialTitles.length > 0 && (
             <div>
-              <div className="text-xs uppercase tracking-wide text-zinc-500 mb-2">Materiały</div>
-              <ul className="list-disc list-inside text-zinc-700 dark:text-zinc-300">
+              <div className="text-xs uppercase tracking-wide text-muted mb-2">Materiały</div>
+              <ul className="list-disc list-inside text-subtle">
                 {materialTitles.map((t, i) => (
                   <li key={i}>{t}</li>
                 ))}

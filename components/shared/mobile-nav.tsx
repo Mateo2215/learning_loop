@@ -43,10 +43,10 @@ export function MobileNav({
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm" />
         <Dialog.Content
-          className="fixed inset-y-0 right-0 z-50 w-72 max-w-[85vw] bg-white dark:bg-zinc-950 border-l border-zinc-200 dark:border-zinc-800 shadow-xl flex flex-col pb-[env(safe-area-inset-bottom)]"
+          className="fixed inset-y-0 right-0 z-50 w-72 max-w-[85vw] bg-surface border-l border-line shadow-xl flex flex-col pb-[env(safe-area-inset-bottom)]"
           aria-describedby={undefined}
         >
-          <div className="flex items-center justify-between px-4 h-14 border-b border-zinc-200 dark:border-zinc-800">
+          <div className="flex items-center justify-between px-4 h-14 border-b border-line">
             <Dialog.Title className="font-semibold text-sm">Menu</Dialog.Title>
             <Dialog.Close asChild>
               <Button variant="ghost" size="sm" aria-label="Zamknij" className="h-8 w-8 p-0">
@@ -60,15 +60,15 @@ export function MobileNav({
                 key={item.href}
                 href={item.href}
                 onClick={() => setOpen(false)}
-                className="flex items-center px-4 py-3 text-sm hover:bg-zinc-100 dark:hover:bg-zinc-900 transition-colors"
+                className="flex items-center px-4 py-3 text-sm hover:bg-elevated transition-colors"
               >
                 {item.label}
               </Link>
             ))}
           </nav>
-          <div className="border-t border-zinc-200 dark:border-zinc-800 px-4 py-3 space-y-3">
+          <div className="border-t border-line px-4 py-3 space-y-3">
             {email && (
-              <div className="text-[10px] uppercase tracking-wide text-zinc-500 dark:text-zinc-400 font-mono truncate">
+              <div className="text-[10px] uppercase tracking-wide text-muted font-mono truncate">
                 {email}
               </div>
             )}

@@ -4,8 +4,14 @@ import { useState, useEffect, useCallback, use } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AnswerInput } from "@/components/sessions/answer-input";
+import { startSession, type ActiveSessionInfo } from "@/lib/sessions/start-client";
+import { ActiveSessionPrompt } from "@/components/sessions/active-session-prompt";
+import { ScreenMessage } from "@/components/sessions/screen-message";
+import { SessionShell } from "@/components/sessions/session-shell";
+import { AlertTriangle, Check, Smile } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface OpenItem {
   id: string;
@@ -29,7 +35,7 @@ interface AnswerResponse {
   feedback_negative: string;
 }
 
-type Phase = "loading" | "empty" | "answering" | "validating" | "feedback" | "done" | "error";
+type Phase = "loading" | "empty" | "conflict" | "answering" | "validating" | "feedback" | "done" | "error";
 
 export default function DeepDivePage({ params }: { params: Promise<{ material_id: string }> }) {
   const { material_id } = use(params);
@@ -44,45 +50,43 @@ export default function DeepDivePage({ params }: { params: Promise<{ material_id
   const [userAnswer, setUserAnswer] = useState("");
   const [feedback, setFeedback] = useState<AnswerResponse | null>(null);
   const [calibrationPicked, setCalibrationPicked] = useState<"agree" | "too_strict" | "too_lenient" | null>(null);
+  const [activeConflict, setActiveConflict] = useState<ActiveSessionInfo | null>(null);
+  const [takingOver, setTakingOver] = useState(false);
+
+  const startDeepDive = useCallback(async (force: boolean) => {
+    setPhase("loading");
+    const result = await startSession<SessionStartResponse>({
+      mode: "deep_dive",
+      material_id,
+      item_count: 10,
+      force,
+    });
+    if (result.kind === "conflict") {
+      setActiveConflict(result.active);
+      setPhase("conflict");
+      return;
+    }
+    if (result.kind === "empty") {
+      setPhase("empty");
+      return;
+    }
+    if (result.kind === "error") {
+      setPhase("error");
+      setErrorMessage(result.message);
+      return;
+    }
+    const data = result.data;
+    setActiveConflict(null);
+    setSessionId(data.session_id);
+    setItems(data.items);
+    setIndex(0);
+    setQuestionShownAt(Date.now());
+    setPhase(data.items.length === 0 ? "empty" : "answering");
+  }, [material_id]);
 
   useEffect(() => {
-    let active = true;
-    (async () => {
-      try {
-        const res = await fetch("/api/sessions/start", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ mode: "deep_dive", material_id, item_count: 10 }),
-        });
-        if (!active) return;
-
-        if (res.status === 404) {
-          setPhase("empty");
-          return;
-        }
-        if (!res.ok) {
-          const body = await res.json().catch(() => ({}));
-          setPhase("error");
-          setErrorMessage(body.error ?? `HTTP ${res.status}`);
-          return;
-        }
-
-        const data = (await res.json()) as SessionStartResponse;
-        setSessionId(data.session_id);
-        setItems(data.items);
-        setIndex(0);
-        setQuestionShownAt(Date.now());
-        setPhase(data.items.length === 0 ? "empty" : "answering");
-      } catch {
-        if (!active) return;
-        setPhase("error");
-        setErrorMessage("Błąd sieci.");
-      }
-    })();
-    return () => {
-      active = false;
-    };
-  }, [material_id]);
+    void startDeepDive(false);
+  }, [startDeepDive]);
 
   const submitAnswer = useCallback(async () => {
     if (!sessionId) return;
@@ -169,6 +173,23 @@ export default function DeepDivePage({ params }: { params: Promise<{ material_id
 
   if (phase === "loading") return <ScreenMessage title="Wczytuję sesję…" />;
 
+  if (phase === "conflict" && activeConflict) {
+    return (
+      <div className="max-w-2xl mx-auto px-4 py-8">
+        <ActiveSessionPrompt
+          active={activeConflict}
+          takingOver={takingOver}
+          onTakeOver={async () => {
+            setTakingOver(true);
+            await startDeepDive(true);
+            setTakingOver(false);
+          }}
+          onCancel={() => router.push("/dashboard")}
+        />
+      </div>
+    );
+  }
+
   if (phase === "empty") {
     return (
       <ScreenMessage
@@ -209,57 +230,58 @@ export default function DeepDivePage({ params }: { params: Promise<{ material_id
   const current = items[index];
   if (!current) return null;
 
-  return (
-    <div className="min-h-[100dvh] flex flex-col max-w-2xl mx-auto px-4 pt-6 pb-[calc(env(safe-area-inset-bottom)+1rem)]">
-      <div className="flex items-center justify-between mb-3 text-xs text-zinc-500 dark:text-zinc-400">
-        <span>{index + 1} / {items.length}</span>
-        <span>Pytanie otwarte</span>
-      </div>
+  const progress = items.length === 0 ? 0 : Math.round((index / items.length) * 100);
 
-      <Card className="mb-4">
-        <CardHeader>
-          <CardTitle className="text-base sm:text-lg font-normal leading-relaxed">
-            {current.question}
-          </CardTitle>
-        </CardHeader>
-      </Card>
+  return (
+    <SessionShell
+      progress={progress}
+      meta={
+        <>
+          <span className="font-mono">{index + 1} / {items.length}</span>
+          <span>Deep Dive</span>
+        </>
+      }
+      bottom={
+        phase === "answering" || phase === "validating" ? (
+          <Button
+            onClick={submitAnswer}
+            disabled={phase === "validating" || userAnswer.trim().length < 3}
+            className="w-full min-h-14 text-base"
+          >
+            {phase === "validating" ? "AI ocenia…" : "Wyślij odpowiedź"}
+          </Button>
+        ) : phase === "feedback" && feedback ? (
+          <Button onClick={() => void goNext()} className="w-full min-h-14 text-base">
+            Następne pytanie →
+          </Button>
+        ) : null
+      }
+    >
+      <h2 className="font-serif text-2xl sm:text-3xl font-normal leading-tight tracking-tight mb-6">
+        {current.question}
+      </h2>
 
       {(phase === "answering" || phase === "validating") && (
-        <div className="flex-1 flex flex-col gap-3">
-          <AnswerInput
-            value={userAnswer}
-            onChange={setUserAnswer}
-            disabled={phase === "validating"}
-            autoFocus
-            rows={6}
-          />
-          <div className="mt-auto sticky bottom-0 pt-2">
-            <Button
-              onClick={submitAnswer}
-              disabled={phase === "validating" || userAnswer.trim().length < 3}
-              className="w-full min-h-14 text-base"
-            >
-              {phase === "validating" ? "AI ocenia…" : "Wyślij odpowiedź"}
-            </Button>
-          </div>
-        </div>
+        <AnswerInput
+          value={userAnswer}
+          onChange={setUserAnswer}
+          disabled={phase === "validating"}
+          autoFocus
+          rows={6}
+          mode="voice"
+        />
       )}
 
       {phase === "feedback" && feedback && (
-        <div className="flex-1 flex flex-col gap-4">
+        <div className="flex flex-col gap-4">
           <FeedbackCard feedback={feedback} userAnswer={userAnswer} reference={current.answer_reference} />
           <CalibrationButtons
             picked={calibrationPicked}
             onPick={(c) => void submitCalibration(c)}
           />
-          <div className="mt-auto sticky bottom-0 pt-2">
-            <Button onClick={() => void goNext()} className="w-full min-h-14 text-base">
-              Następne pytanie →
-            </Button>
-          </div>
         </div>
       )}
-    </div>
+    </SessionShell>
   );
 }
 
@@ -273,9 +295,9 @@ function FeedbackCard({
   reference: string | null;
 }) {
   const evalLabel: Record<AnswerResponse["evaluation"], { label: string; cls: string }> = {
-    correct: { label: "Poprawnie", cls: "text-emerald-700 dark:text-emerald-300" },
-    partially_correct: { label: "Częściowo poprawnie", cls: "text-amber-700 dark:text-amber-300" },
-    incorrect: { label: "Niepoprawnie", cls: "text-red-700 dark:text-red-300" },
+    correct: { label: "Poprawnie", cls: "text-ok" },
+    partially_correct: { label: "Częściowo poprawnie", cls: "text-warn" },
+    incorrect: { label: "Niepoprawnie", cls: "text-bad" },
   };
   const { label, cls } = evalLabel[feedback.evaluation];
 
@@ -286,36 +308,22 @@ function FeedbackCard({
       </CardHeader>
       <CardContent className="space-y-3 text-sm">
         {feedback.feedback_positive && (
-          <div className="border-l-2 border-emerald-500 pl-3">
-            <div className="text-xs uppercase tracking-wide text-emerald-700 dark:text-emerald-300 mb-1">
+          <div className="border-l-2 border-ok pl-3">
+            <div className="text-xs uppercase tracking-wide text-ok mb-1">
               Plusy
             </div>
-            <div className="text-zinc-700 dark:text-zinc-200">{feedback.feedback_positive}</div>
+            <div className="text-subtle">{feedback.feedback_positive}</div>
           </div>
         )}
         {feedback.feedback_negative && (
-          <div className="border-l-2 border-red-500 pl-3">
-            <div className="text-xs uppercase tracking-wide text-red-700 dark:text-red-300 mb-1">
+          <div className="border-l-2 border-bad pl-3">
+            <div className="text-xs uppercase tracking-wide text-bad mb-1">
               Minusy
             </div>
-            <div className="text-zinc-700 dark:text-zinc-200">{feedback.feedback_negative}</div>
+            <div className="text-subtle">{feedback.feedback_negative}</div>
           </div>
         )}
-        <details className="pt-2">
-          <summary className="text-xs text-zinc-500 cursor-pointer">Twoja odpowiedź / wzorzec</summary>
-          <div className="mt-2 space-y-2">
-            <div>
-              <div className="text-xs text-zinc-500 mb-1">Twoja odpowiedź:</div>
-              <div className="text-zinc-700 dark:text-zinc-300 whitespace-pre-wrap">{userAnswer}</div>
-            </div>
-            {reference && (
-              <div>
-                <div className="text-xs text-zinc-500 mb-1">Wzorcowa odpowiedź:</div>
-                <div className="text-zinc-700 dark:text-zinc-300 whitespace-pre-wrap italic">{reference}</div>
-              </div>
-            )}
-          </div>
-        </details>
+        <FeedbackDetails userAnswer={userAnswer} reference={reference} />
       </CardContent>
     </Card>
   );
@@ -329,52 +337,73 @@ function CalibrationButtons({
   onPick: (c: "agree" | "too_strict" | "too_lenient") => void;
 }) {
   const disabled = picked !== null;
-  const cell = (key: "too_strict" | "agree" | "too_lenient", label: string) => (
-    <Button
-      key={key}
-      size="sm"
-      variant={picked === key ? "default" : "outline"}
-      disabled={disabled}
-      onClick={() => onPick(key)}
-      className={picked === key ? "ring-2 ring-emerald-500" : ""}
-    >
-      {label}
-      {picked === key && <span className="ml-1.5">✓</span>}
-    </Button>
-  );
+  const cell = (
+    key: "too_strict" | "agree" | "too_lenient",
+    label: string,
+    Icon: typeof AlertTriangle,
+  ) => {
+    const active = picked === key;
+    return (
+      <button
+        key={key}
+        type="button"
+        disabled={disabled}
+        onClick={() => onPick(key)}
+        className={cn(
+          "flex items-center justify-center gap-1.5 min-h-11 px-3 rounded-lg border text-sm transition-colors",
+          active
+            ? "border-accent bg-accent/10 text-accent ring-1 ring-accent"
+            : "border-line bg-surface text-subtle hover:border-accent/40",
+          disabled && !active && "opacity-50",
+        )}
+      >
+        <Icon className="h-4 w-4" />
+        <span>{label}</span>
+      </button>
+    );
+  };
 
   return (
     <div className="space-y-2">
-      <div className="text-xs text-zinc-500 dark:text-zinc-400">
+      <div className="text-xs text-muted">
         {picked ? "Dziękuję — kalibracja zapisana" : "Czy ocena AI była trafna?"}
       </div>
       <div className="grid grid-cols-3 gap-2">
-        {cell("too_strict", "Za surowo")}
-        {cell("agree", "Trafnie")}
-        {cell("too_lenient", "Za pobłażliwie")}
+        {cell("too_strict", "Surowo", AlertTriangle)}
+        {cell("agree", "Trafnie", Check)}
+        {cell("too_lenient", "Pobłażliwie", Smile)}
       </div>
     </div>
   );
 }
 
-function ScreenMessage({
-  title,
-  description,
-  action,
-}: {
-  title: string;
-  description?: string;
-  action?: React.ReactNode;
-}) {
+function FeedbackDetails({ userAnswer, reference }: { userAnswer: string; reference: string | null }) {
+  const [open, setOpen] = useState(false);
   return (
-    <div className="max-w-xl mx-auto px-4 py-12">
-      <Card>
-        <CardHeader>
-          <CardTitle>{title}</CardTitle>
-          {description && <CardDescription>{description}</CardDescription>}
-        </CardHeader>
-        {action && <CardContent>{action}</CardContent>}
-      </Card>
+    <div className="pt-2">
+      <button
+        type="button"
+        onClick={() => setOpen((s) => !s)}
+        className="text-xs text-muted hover:text-subtle inline-flex items-center gap-1"
+        aria-expanded={open}
+      >
+        <span className={cn("transition-transform", open && "rotate-90")}>▸</span>
+        Twoja odpowiedź / wzorzec
+      </button>
+      {open && (
+        <div className="mt-3 space-y-3">
+          <div>
+            <div className="text-[10px] uppercase tracking-wide text-muted mb-1">Twoja odpowiedź</div>
+            <div className="text-sm text-subtle whitespace-pre-wrap">{userAnswer}</div>
+          </div>
+          {reference && (
+            <div>
+              <div className="text-[10px] uppercase tracking-wide text-muted mb-1">Wzorcowa odpowiedź</div>
+              <div className="text-sm text-subtle whitespace-pre-wrap italic">{reference}</div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

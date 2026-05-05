@@ -21,7 +21,7 @@ export function ThemeToggle() {
     <div
       role="radiogroup"
       aria-label="Motyw"
-      className="inline-flex items-center rounded-md border border-zinc-200 dark:border-zinc-800 p-0.5"
+      className="inline-flex items-center rounded-md border border-line p-0.5"
     >
       {OPTIONS.map(({ value, label, Icon }) => {
         const active = theme === value;

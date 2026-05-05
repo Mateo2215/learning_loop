@@ -51,7 +51,7 @@ export default async function DeepDiveSelectorPage() {
   return (
     <div className="max-w-3xl mx-auto px-4 py-8">
       <h1 className="text-2xl font-semibold mb-2">Deep Dive</h1>
-      <p className="text-sm text-zinc-600 dark:text-zinc-400 mb-6">
+      <p className="text-sm text-muted mb-6">
         Wybierz materiał, na którym chcesz przepracować pytania otwarte. AI oceni Twoje odpowiedzi.
       </p>
 
@@ -75,16 +75,16 @@ export default async function DeepDiveSelectorPage() {
             <Link
               key={m.id}
               href={`/sessions/deep-dive/${m.id}`}
-              className="block rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-4 hover:border-zinc-400 dark:hover:border-zinc-600 transition-colors"
+              className="block rounded-lg border border-line bg-surface p-4 hover:border-accent/60 transition-colors"
             >
               <div className="flex items-start justify-between gap-4">
                 <div className="flex-1 min-w-0">
                   <h2 className="font-medium truncate">{m.title}</h2>
-                  <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
+                  <p className="text-xs text-muted mt-1">
                     {CATEGORY_LABELS[m.category]} • {m.open_count} pytań otwartych
                   </p>
                 </div>
-                <span className="text-sm text-zinc-500">→</span>
+                <span className="text-sm text-muted">→</span>
               </div>
             </Link>
           ))}

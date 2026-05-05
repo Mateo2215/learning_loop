@@ -1,9 +1,14 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { CalibrationSection } from "./calibration-client";
 import { ExportSection } from "./export-client";
 import { ThemeSection } from "./theme-section";
 import { CATEGORY_LABELS, type Category } from "@/lib/db/types";
+import { PageHeader } from "@/components/shared/page-header";
+import { getMonthlyUsage } from "@/lib/ai/limits";
+import { COST_LIMITS } from "@/lib/ai/pricing";
+import { SectionCard } from "@/components/shared/section-card";
 
 interface OffsetRow {
   category: Category;
@@ -29,18 +34,58 @@ export default async function SettingsPage() {
     category_label: CATEGORY_LABELS[r.category],
   }));
 
+  let monthlyUsd = 0;
+  try {
+    monthlyUsd = await getMonthlyUsage(supabase, user.id);
+  } catch {
+    monthlyUsd = 0;
+  }
+  const softPct = Math.min(100, (monthlyUsd / COST_LIMITS.monthlySoftUsd) * 100);
+
   return (
     <div className="max-w-3xl mx-auto px-4 py-8">
-      <h1 className="text-2xl font-semibold mb-2">Ustawienia</h1>
-      <p className="text-sm text-zinc-600 dark:text-zinc-400 mb-6">
-        Konto: <span className="font-mono">{user.email}</span>
-      </p>
+      <PageHeader
+        title="Ustawienia"
+        description={
+          <>
+            Konto: <span className="font-mono">{user.email}</span>
+          </>
+        }
+      />
 
       <div className="space-y-6">
         <ThemeSection />
         <CalibrationSection initialRows={rows} />
+
+        <SectionCard
+          title="Koszty"
+          description={`${formatUsd(monthlyUsd)} / ${formatUsd(COST_LIMITS.monthlySoftUsd)} miękki limit miesięczny`}
+          action={
+            <Link
+              href="/settings/costs"
+              className="text-sm text-accent hover:underline"
+            >
+              Szczegóły →
+            </Link>
+          }
+        >
+          <div className="h-1.5 w-full bg-elevated rounded-full overflow-hidden">
+            <div
+              className="h-full bg-accent transition-all"
+              style={{ width: `${softPct.toFixed(1)}%` }}
+            />
+          </div>
+        </SectionCard>
+
         <ExportSection />
       </div>
     </div>
   );
+}
+
+function formatUsd(n: number): string {
+  if (n === 0) return "$0";
+  if (n < 0.01) return `$${n.toFixed(4)}`;
+  if (n < 1) return `$${n.toFixed(3)}`;
+  return `$${n.toFixed(2)}`;
 }

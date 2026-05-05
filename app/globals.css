@@ -4,68 +4,82 @@
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
 /*
- * Theme tokens. Light mode is the default; the ThemeProvider toggles
- * `data-theme="dark"` on the <html> element for dark mode.
- *
- * Token naming is semantic (canvas / surface / elevated, etc.) so we can
- * re-paint the palette in Phase 10 without changing every consumer.
+ * Reading Room palette — warm off-white canvas, deep warm-black dark, rusty
+ * accent. The naming is semantic so any consumer using `bg-canvas`,
+ * `text-fg`, `border-line`, `text-accent` follows the theme automatically.
  */
 
 :root {
-  --background: #fafafa;
-  --foreground: #18181b;
+  --bg-canvas: #FAFAF7;
+  --bg-surface: #FFFFFF;
+  --bg-elevated: #F0EFEA;
 
-  --bg-canvas: #fafafa;
-  --bg-surface: #ffffff;
-  --bg-elevated: #f4f4f5;
+  --fg-primary: #1A1A18;
+  --fg-secondary: #3D3D38;
+  --fg-muted: #6B6B62;
 
-  --fg-primary: #18181b;
-  --fg-secondary: #3f3f46;
-  --fg-muted: #71717a;
+  --border-default: #DDDBD3;
+  --border-strong: #C5C3B9;
 
-  --border-default: #e4e4e7;
-  --border-strong: #d4d4d8;
+  --accent: #B8541C;
+  --accent-fg: #FFFFFF;
 
-  --accent: #059669;
-  --accent-fg: #ffffff;
-
-  --success: #059669;
-  --warning: #d97706;
-  --danger: #dc2626;
+  --success: #2E7D5E;
+  --warning: #B8841C;
+  --danger: #A8321F;
 }
 
 [data-theme="dark"] {
-  --background: #0a0a0a;
-  --foreground: #fafafa;
+  --bg-canvas: #0F0F0E;
+  --bg-surface: #1A1A18;
+  --bg-elevated: #252521;
 
-  --bg-canvas: #0a0a0a;
-  --bg-surface: #18181b;
-  --bg-elevated: #27272a;
+  --fg-primary: #F5F4F0;
+  --fg-secondary: #D5D4CF;
+  --fg-muted: #8A8A82;
 
-  --fg-primary: #fafafa;
-  --fg-secondary: #d4d4d8;
-  --fg-muted: #a1a1aa;
+  --border-default: #2E2E29;
+  --border-strong: #3F3F39;
 
-  --border-default: #27272a;
-  --border-strong: #3f3f46;
+  --accent: #D97A47;
+  --accent-fg: #0F0F0E;
 
-  --accent: #10b981;
-  --accent-fg: #052e1e;
-
-  --success: #10b981;
-  --warning: #f59e0b;
-  --danger: #ef4444;
+  --success: #5BA888;
+  --warning: #D9A847;
+  --danger: #D9614C;
 }
 
+/*
+ * Map our semantic tokens onto Tailwind v4 utilities. After this, classes
+ * like `bg-canvas`, `text-fg`, `border-line`, `text-accent`, `font-serif`
+ * are first-class Tailwind utilities just like `bg-zinc-50` was.
+ */
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+  --color-canvas: var(--bg-canvas);
+  --color-surface: var(--bg-surface);
+  --color-elevated: var(--bg-elevated);
+
+  --color-fg: var(--fg-primary);
+  --color-subtle: var(--fg-secondary);
+  --color-muted: var(--fg-muted);
+
+  --color-line: var(--border-default);
+  --color-line-strong: var(--border-strong);
+
+  --color-accent: var(--accent);
+  --color-accent-fg: var(--accent-fg);
+
+  --color-ok: var(--success);
+  --color-warn: var(--warning);
+  --color-bad: var(--danger);
+
   --font-sans: var(--font-geist-sans);
+  --font-serif: var(--font-source-serif), ui-serif, Georgia, serif;
   --font-mono: var(--font-geist-mono);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+  background: var(--bg-canvas);
+  color: var(--fg-primary);
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
 }

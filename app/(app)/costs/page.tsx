@@ -50,7 +50,7 @@ export default async function CostsPage() {
   return (
     <div className="max-w-4xl mx-auto px-4 py-8">
       <h1 className="text-2xl font-semibold mb-2">Koszty</h1>
-      <p className="text-sm text-zinc-600 dark:text-zinc-400 mb-6">
+      <p className="text-sm text-muted mb-6">
         Każde wywołanie AI logowane przez <code className="font-mono text-xs">trackAICall</code>. Limity:{" "}
         <span className="font-mono">${COST_LIMITS.monthlySoftUsd}</span> ostrzeżenie /{" "}
         <span className="font-mono">${COST_LIMITS.monthlyHardUsd}</span> twardy / {" "}
@@ -58,13 +58,13 @@ export default async function CostsPage() {
       </p>
 
       {hardHit && (
-        <div className="mb-6 p-4 rounded-lg border border-red-500 bg-red-50 dark:bg-red-950/30 text-sm text-red-900 dark:text-red-200">
+        <div className="mb-6 p-4 rounded-lg border border-bad bg-bad/10 text-sm text-bad">
           Twardy limit przekroczony. Operacje non-critical (kompresja, generowanie, audyty) są zablokowane do końca miesiąca.
           Walidacje aktywnych sesji nadal działają.
         </div>
       )}
       {softHit && !hardHit && (
-        <div className="mb-6 p-4 rounded-lg border border-amber-500 bg-amber-50 dark:bg-amber-950/30 text-sm text-amber-900 dark:text-amber-200">
+        <div className="mb-6 p-4 rounded-lg border border-warn bg-warn/10 text-sm text-warn">
           Miękki limit przekroczony. Aplikacja działa normalnie, ale warto rzucić okiem na breakdown niżej.
         </div>
       )}
@@ -104,12 +104,12 @@ export default async function CostsPage() {
         </CardHeader>
         <CardContent>
           {usage.length === 0 ? (
-            <p className="text-sm text-zinc-500">Brak wpisów w tym miesiącu.</p>
+            <p className="text-sm text-muted">Brak wpisów w tym miesiącu.</p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-xs">
-                <thead className="border-b border-zinc-200 dark:border-zinc-800">
-                  <tr className="text-left text-zinc-500">
+                <thead className="border-b border-line">
+                  <tr className="text-left text-muted">
                     <th className="py-2 pr-2">Czas</th>
                     <th className="py-2 pr-2">Operacja</th>
                     <th className="py-2 pr-2">Model</th>
@@ -121,12 +121,12 @@ export default async function CostsPage() {
                 </thead>
                 <tbody>
                   {usage.slice(0, 10).map((r, i) => (
-                    <tr key={i} className="border-b border-zinc-100 dark:border-zinc-900">
-                      <td className="py-1.5 pr-2 text-zinc-500 font-mono">{formatTime(r.created_at)}</td>
+                    <tr key={i} className="border-b border-line/60">
+                      <td className="py-1.5 pr-2 text-muted font-mono">{formatTime(r.created_at)}</td>
                       <td className="py-1.5 pr-2 font-mono">{r.operation_type}</td>
-                      <td className="py-1.5 pr-2 text-zinc-500">{shortModel(r.model)}</td>
+                      <td className="py-1.5 pr-2 text-muted">{shortModel(r.model)}</td>
                       <td className="py-1.5 pr-2 text-right font-mono">{r.input_tokens}</td>
-                      <td className="py-1.5 pr-2 text-right font-mono text-zinc-500">{r.cached_input_tokens || "—"}</td>
+                      <td className="py-1.5 pr-2 text-right font-mono text-muted">{r.cached_input_tokens || "—"}</td>
                       <td className="py-1.5 pr-2 text-right font-mono">{r.output_tokens}</td>
                       <td className="py-1.5 text-right font-mono">{formatUsd(Number(r.cost_usd))}</td>
                     </tr>
@@ -154,7 +154,7 @@ function CostTile({ label, value, sub }: { label: string; value: string; sub?: s
 }
 
 function BreakdownTable({ rows }: { rows: { key: string; cost: number; count: number }[] }) {
-  if (rows.length === 0) return <p className="text-sm text-zinc-500">Brak danych.</p>;
+  if (rows.length === 0) return <p className="text-sm text-muted">Brak danych.</p>;
   const total = rows.reduce((s, r) => s + r.cost, 0);
 
   return (
@@ -165,13 +165,13 @@ function BreakdownTable({ rows }: { rows: { key: string; cost: number; count: nu
           <div key={r.key} className="text-sm">
             <div className="flex justify-between gap-4">
               <span className="font-mono text-xs truncate">{r.key}</span>
-              <span className="font-mono text-xs text-zinc-500">
+              <span className="font-mono text-xs text-muted">
                 {r.count}× — {formatUsd(r.cost)}
               </span>
             </div>
-            <div className="mt-1 h-1 bg-zinc-200 dark:bg-zinc-800 rounded-full overflow-hidden">
+            <div className="mt-1 h-1 bg-elevated rounded-full overflow-hidden">
               <div
-                className="h-full bg-zinc-900 dark:bg-zinc-100"
+                className="h-full bg-fg"
                 style={{ width: `${pct.toFixed(1)}%` }}
               />
             </div>

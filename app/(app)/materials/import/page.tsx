@@ -232,7 +232,7 @@ export default function ImportPage() {
                 )}
 
                 {errorMessage && (
-                  <p className="text-sm text-red-600 dark:text-red-400">{errorMessage}</p>
+                  <p className="text-sm text-bad">{errorMessage}</p>
                 )}
 
                 <Button type="submit" className="mt-2">Zaimportuj</Button>
@@ -251,13 +251,13 @@ export default function ImportPage() {
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
-                <div className="h-2 w-full bg-zinc-200 dark:bg-zinc-800 rounded-full overflow-hidden">
+                <div className="h-2 w-full bg-elevated rounded-full overflow-hidden">
                   <div
-                    className="h-full bg-zinc-900 dark:bg-zinc-100 transition-all"
+                    className="h-full bg-fg transition-all"
                     style={{ width: `${jobState?.progress ?? 0}%` }}
                   />
                 </div>
-                <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                <p className="text-sm text-muted">
                   {progressLabel(jobState?.progress ?? 0)} ({jobState?.progress ?? 0}%)
                 </p>
               </div>
@@ -281,7 +281,7 @@ export default function ImportPage() {
           <Card>
             <CardHeader>
               <CardTitle>Coś poszło nie tak</CardTitle>
-              <CardDescription className="text-red-600 dark:text-red-400">
+              <CardDescription className="text-bad">
                 {errorMessage ?? "Nieznany błąd."}
               </CardDescription>
             </CardHeader>

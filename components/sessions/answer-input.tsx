@@ -44,7 +44,7 @@ export function AnswerInput({
           disabled
           aria-label="Voice input — w przygotowaniu"
           title="Voice input — w przygotowaniu"
-          className="absolute bottom-2 right-2 h-9 w-9 inline-flex items-center justify-center rounded-md text-zinc-400 bg-zinc-100 dark:bg-zinc-800 cursor-not-allowed"
+          className="absolute bottom-2 right-2 h-9 w-9 inline-flex items-center justify-center rounded-md text-muted bg-elevated cursor-not-allowed"
         >
           <Mic className="h-4 w-4" />
         </button>

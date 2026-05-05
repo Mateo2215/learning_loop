@@ -39,7 +39,7 @@ export function GapLinkBanner({
   }
 
   return (
-    <Card className="mb-4 border-emerald-500 bg-emerald-50/40 dark:bg-emerald-950/20">
+    <Card className="mb-4 border-accent bg-accent/10">
       <CardHeader>
         <CardTitle className="text-base">Czy ten materiał adresuje lukę?</CardTitle>
         <CardDescription>

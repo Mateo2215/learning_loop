@@ -17,10 +17,10 @@ interface Row {
 }
 
 function describeOffset(offset: number, total: number): { label: string; cls: string } {
-  if (total < 3) return { label: "Mało danych", cls: "text-zinc-500" };
-  if (offset <= -0.2) return { label: "AI za surowe → łagodniej", cls: "text-amber-700 dark:text-amber-300" };
-  if (offset >= 0.2) return { label: "AI za pobłażliwe → surowiej", cls: "text-red-700 dark:text-red-300" };
-  return { label: "Skalibrowane", cls: "text-emerald-700 dark:text-emerald-300" };
+  if (total < 3) return { label: "Mało danych", cls: "text-muted" };
+  if (offset <= -0.2) return { label: "AI za surowe → łagodniej", cls: "text-warn" };
+  if (offset >= 0.2) return { label: "AI za pobłażliwe → surowiej", cls: "text-bad" };
+  return { label: "Skalibrowane", cls: "text-ok" };
 }
 
 export function CalibrationSection({ initialRows }: { initialRows: Row[] }) {
@@ -62,14 +62,14 @@ export function CalibrationSection({ initialRows }: { initialRows: Row[] }) {
         </div>
 
         {rows.length === 0 ? (
-          <p className="text-sm text-zinc-500">
+          <p className="text-sm text-muted">
             Brak danych kalibracyjnych. Po Deep Dive klikaj 3 przyciski (Za surowo / Trafnie / Za pobłażliwie), wtedy AI nauczy się Twoich preferencji.
           </p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="text-left text-xs uppercase tracking-wide text-zinc-500 border-b border-zinc-200 dark:border-zinc-800">
+                <tr className="text-left text-xs uppercase tracking-wide text-muted border-b border-line">
                   <th className="py-2">Kategoria</th>
                   <th className="py-2 text-center">Za surowo</th>
                   <th className="py-2 text-center">Za pobłażliwie</th>
@@ -82,7 +82,7 @@ export function CalibrationSection({ initialRows }: { initialRows: Row[] }) {
                 {rows.map((r) => {
                   const desc = describeOffset(r.current_offset, r.total_validations);
                   return (
-                    <tr key={r.category} className="border-b border-zinc-100 dark:border-zinc-900">
+                    <tr key={r.category} className="border-b border-line/60">
                       <td className="py-2">{r.category_label}</td>
                       <td className="py-2 text-center font-mono">{r.too_strict_count}</td>
                       <td className="py-2 text-center font-mono">{r.too_lenient_count}</td>

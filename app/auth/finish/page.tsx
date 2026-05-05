@@ -6,8 +6,8 @@ import { createClient } from "@/lib/supabase/client";
 
 export default function AuthFinishPage() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-zinc-50 dark:bg-black">
-      <Suspense fallback={<p className="text-sm text-zinc-600 dark:text-zinc-400">Kończę logowanie…</p>}>
+    <div className="min-h-screen flex items-center justify-center bg-canvas">
+      <Suspense fallback={<p className="text-sm text-muted">Kończę logowanie…</p>}>
         <FinishInner />
       </Suspense>
     </div>
@@ -51,5 +51,5 @@ function FinishInner() {
       });
   }, [params, router]);
 
-  return <p className="text-sm text-zinc-600 dark:text-zinc-400">{message}</p>;
+  return <p className="text-sm text-muted">{message}</p>;
 }

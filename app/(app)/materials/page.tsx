@@ -2,8 +2,11 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { CATEGORY_LABELS, type Material } from "@/lib/db/types";
+import { PageHeader } from "@/components/shared/page-header";
+import { EmptyState } from "@/components/shared/empty-state";
+import { StatusPill } from "@/components/shared/status-pill";
+import { Tag } from "@/components/shared/tag";
 
 export default async function MaterialsPage() {
   const supabase = await createClient();
@@ -16,44 +19,60 @@ export default async function MaterialsPage() {
     .is("deleted_at", null)
     .order("imported_at", { ascending: false });
 
+  const groups = groupByDate((materials ?? []) as MaterialRowData[]);
+
   return (
     <div className="max-w-4xl mx-auto px-4 py-8">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-semibold">Materiały</h1>
-        <Button size="sm" asChild>
-          <Link href="/materials/import">+ Nowy materiał</Link>
-        </Button>
-      </div>
+      <PageHeader
+        title={
+          <>
+            Materiały
+            {materials && (
+              <span className="text-muted font-mono text-base ml-3 align-middle">
+                · {materials.length}
+              </span>
+            )}
+          </>
+        }
+        actions={
+          <Button size="sm" asChild>
+            <Link href="/materials/import">+ Nowy</Link>
+          </Button>
+        }
+      />
 
-        {error && (
-          <p className="text-sm text-red-600 dark:text-red-400 mb-4">
-            Błąd: {error.message}
-          </p>
-        )}
+      {error && <p className="text-sm text-bad mb-4">Błąd: {error.message}</p>}
 
-        {!error && (!materials || materials.length === 0) && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Brak materiałów</CardTitle>
-              <CardDescription>
-                Zaimportuj pierwszy materiał, żeby zacząć generowanie fiszek i pytań.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Button asChild>
-                <Link href="/materials/import">Zaimportuj pierwszy →</Link>
-              </Button>
-            </CardContent>
-          </Card>
-        )}
+      {!error && (!materials || materials.length === 0) && (
+        <EmptyState
+          title="Brak materiałów"
+          description="Zaimportuj pierwszy materiał, żeby zacząć generowanie fiszek i pytań."
+          cta={
+            <Button asChild>
+              <Link href="/materials/import">Zaimportuj pierwszy →</Link>
+            </Button>
+          }
+        />
+      )}
 
-        {materials && materials.length > 0 && (
-          <div className="grid gap-3">
-            {materials.map((m) => (
-              <MaterialRow key={m.id} material={m as MaterialRowData} />
-            ))}
-          </div>
-        )}
+      {materials && materials.length > 0 && (
+        <div className="space-y-8">
+          {groups.map(([groupLabel, rows]) => (
+            <section key={groupLabel}>
+              <h3 className="font-serif text-xs uppercase tracking-widest text-muted mb-2">
+                {groupLabel}
+              </h3>
+              <ul className="border-y border-line divide-y divide-line">
+                {rows.map((m) => (
+                  <li key={m.id}>
+                    <MaterialRow material={m} />
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -64,45 +83,27 @@ function MaterialRow({ material }: { material: MaterialRowData }) {
   return (
     <Link
       href={`/materials/${material.id}`}
-      className="block rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-4 hover:border-zinc-400 dark:hover:border-zinc-600 transition-colors"
+      className="flex items-start justify-between gap-4 py-3 hover:bg-elevated/40 px-2 -mx-2 rounded-md transition-colors"
     >
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex-1 min-w-0">
-          <h2 className="font-medium truncate">{material.title}</h2>
-          <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
-            {CATEGORY_LABELS[material.category]} • {formatDate(material.imported_at)}
-          </p>
-          {material.tags && material.tags.length > 0 && (
-            <div className="flex flex-wrap gap-1 mt-2">
-              {material.tags.slice(0, 5).map((t) => (
-                <span key={t} className="text-xs px-2 py-0.5 rounded-full bg-zinc-100 dark:bg-zinc-900">
-                  {t}
-                </span>
-              ))}
-            </div>
-          )}
-        </div>
-        <StatusBadge status={material.status} />
+      <div className="flex-1 min-w-0">
+        <h2 className="font-serif text-base font-medium truncate">{material.title}</h2>
+        <p className="text-xs text-muted mt-0.5 font-mono">
+          {CATEGORY_LABELS[material.category]} · {formatDate(material.imported_at)}
+        </p>
+        {material.tags && material.tags.length > 0 && (
+          <div className="hidden sm:flex flex-wrap gap-1 mt-2">
+            {material.tags.slice(0, 5).map((t) => (
+              <Tag key={t}>{t}</Tag>
+            ))}
+          </div>
+        )}
       </div>
+      {material.status !== "ready" && (
+        <StatusPill variant={material.status === "processing" ? "processing" : "failed"}>
+          {material.status === "processing" ? "W trakcie" : "Błąd"}
+        </StatusPill>
+      )}
     </Link>
-  );
-}
-
-function StatusBadge({ status }: { status: Material["status"] }) {
-  const styles: Record<Material["status"], string> = {
-    processing: "bg-amber-100 text-amber-900 dark:bg-amber-900/30 dark:text-amber-200",
-    ready: "bg-emerald-100 text-emerald-900 dark:bg-emerald-900/30 dark:text-emerald-200",
-    failed: "bg-red-100 text-red-900 dark:bg-red-900/30 dark:text-red-200",
-  };
-  const labels: Record<Material["status"], string> = {
-    processing: "W trakcie…",
-    ready: "Gotowy",
-    failed: "Błąd",
-  };
-  return (
-    <span className={`text-xs px-2 py-1 rounded-full font-medium ${styles[status]}`}>
-      {labels[status]}
-    </span>
   );
 }
 
@@ -112,4 +113,32 @@ function formatDate(iso: string): string {
     month: "long",
     year: "numeric",
   });
+}
+
+function groupByDate(rows: MaterialRowData[]): [string, MaterialRowData[]][] {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+
+  const groups = new Map<string, MaterialRowData[]>();
+  for (const r of rows) {
+    const d = new Date(r.imported_at);
+    const dStart = new Date(d);
+    dStart.setHours(0, 0, 0, 0);
+
+    let key: string;
+    if (dStart.getTime() === today.getTime()) key = "Dziś";
+    else if (dStart.getTime() === yesterday.getTime()) key = "Wczoraj";
+    else
+      key = d.toLocaleDateString("pl-PL", {
+        month: "long",
+        year: "numeric",
+      });
+
+    const list = groups.get(key) ?? [];
+    list.push(r);
+    groups.set(key, list);
+  }
+  return Array.from(groups.entries());
 }
