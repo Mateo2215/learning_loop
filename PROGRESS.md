@@ -4,6 +4,62 @@ Session handoff log. Most recent entry on top. Keep this file under 200 lines.
 
 ---
 
+## 2026-05-05 — M3 Phases 8–10 (DONE), Phase 11 PENDING
+
+Commit `37923f7`. 56 plików (+2128/-920). Build green (41 routes), tsc clean. Po tym commicie zatrzymujemy się na test wizualny przed Phase 11 (final QA + closing commit + dokumentacja smoke testów).
+
+### Phase 8 — Cross-device guard + Fresh Materials + voice hooks
+- `lib/sessions/active-guard.ts` — `findActiveSession` (6h stale window) + `endActiveSessions` dla force-takeover.
+- `lib/sessions/start-client.ts` — wspólny `startSession<T>` helper (kind: ok/empty/conflict/error). Klient detektuje device po `(max-width: 767px)`.
+- `components/sessions/active-session-prompt.tsx` — Card z "Przejmij tutaj" / "Wróć".
+- `app/api/sessions/start/route.ts` — przed insertem sprawdza aktywną sesję; 409 `active_session_elsewhere` z payloadem `{ id, mode, device, started_at }`. `force: true` kończy starą i tworzy nową.
+- 3 strony sesji (review/deep-dive/audit) mają nowy `phase === "conflict"` z dedykowanym retry callback.
+- `mode='voice'` zaaplikowany na AnswerInput w deep-dive + audit (mic icon hook z Phase 4 teraz aktywny).
+- `components/dashboard/fresh-materials.tsx` — server component, materiały z ostatnich 24h bez wpisu w `reviews` (sessions nie FK do material, więc reviews jest źródłem "touched").
+
+### Phase 9 — Error boundaries + dep cleanup
+- `app/error.tsx` (root, własny `<html>`/`<body>` per Next 16), `app/(app)/error.tsx` (protected routes), `app/not-found.tsx`.
+- `voyageai` usunięte z `package.json` (M2 i tak używał raw fetch). `npm audit`: 2 moderate transitive vulns, 0 high.
+
+### Phase 10 — Reading Room visual reskin (główna polerka)
+- **Token foundation**: paleta Reading Room w `app/globals.css` (rdzawy `#B8541C` → `#D97A47` w dark, warm canvas `#FAFAF7` / `#0F0F0E`) + `@theme inline` mapping. Dzięki temu `bg-canvas`, `text-fg`, `border-line`, `text-accent`, `font-serif` działają jako natywne Tailwind utility — zmiana palety = jeden var.
+- **Source Serif 4** załadowany przez `next/font/google`, eksposed jako `--font-source-serif` → `font-serif`.
+- **Mechaniczny refactor**: 33 pliki zmigrowane z `bg-zinc-*` / `dark:*` / `emerald` / `red` / `amber` na semantic tokens. 0 dopasowań starych klas po migracji.
+- **Shared component library** (10 nowych): `page-header`, `tag`, `stat-tile`, `status-pill`, `empty-state`, `section-card`, `loading-skeleton`, `confirm-button`, `screen-message`, `session-shell`.
+- **Nav redukcja 9→4**: TopNav (client) z desktop nav + dropdown ("Sesje", "Menu") + active state border-accent. `BottomNav` 4-ikonowy na mobile (poza sesjami). `lib/nav/paths.ts` — `isSessionRunPath`, `isPathInside`. Email z nav usunięty, ląduje w `/settings`.
+- **Sessions chrome-less**: TopNav i BottomNav samodzielnie się chowają na session-run paths via `usePathname` gating.
+- **Sesja Review**: SessionShell, font-serif text-2xl/4xl, progress thin bar u góry, leech jako kropka, rating buttons 4-w-rzędzie z hero cyfrą + label, odpowiedź w mono `bg-elevated` (drop emerald — colour-conflict z CTA).
+- **Sesja Deep Dive + Audyt**: SessionShell + hero serif + custom collapsible (FeedbackDetails) zamiast `<details>`. Calibration buttons z lucide ikonami + skróconymi etykietami (Surowo/Trafnie/Pobłażliwie).
+- **Dashboard**: FreshMaterials hero (no Card chrome, duża lista + "Zacznij Deep Dive →" CTA per item), 6→3 actionable StatTiles (klikalne, link), one-line statystyka mono. Plus FAB na mobile (`bottom-20 right-4`).
+- **Materials**: list dense + grouping po dacie (Dziś/Wczoraj/Maj 2026). StatusPill tylko dla non-ready. Detail: hero h1 serif + `ItemsTabs` (custom, nie shadcn — Fiszki/Pytania).
+- **Audyty**: lista zamiast Cards z trigger badge w mono (`7D`/`30D`/`90D`/`RES`) + relative date.
+- **Gaps**: severity przez `border-l-[3px]` (line/warn/bad) + StatusPill, bez Card backgrounds.
+- **Costs reorg**: `/settings/costs` jako re-eksport, sekcja w `/settings` z progress bar do soft limit. `CostLimitBanner` globalny w `(app)/layout.tsx` (rendered tylko gdy soft/hard hit).
+- **Login editorial**: nazwa appki w serif text-5xl z accent na "Loop", manifesto pod, magic link form z h-12 input/button + "Bez hasła. Magic Link" hint.
+
+### Outstanding for M3 (Phase 11 — final close)
+- **Manualny smoke test** end-to-end (14-punktowa lista z planu): tokens migracji, Source Serif rendering, top/bottom nav active state, sesja Review fullscreen, Dashboard hero, Costs banner globalny, mobile single-handed, light/dark parity, offline session w sesji review, Realtime import status, cross-device prompt, Fresh Materials widget, voice icon disabled, Lighthouse mobile ≥90 PWA install.
+- Pliki do aktualizacji: `tasks/todo.md`, `tasks/lessons.md`, ewentualnie root `CLAUDE.md` jeśli decyzje zdywergowały od planu.
+- **Final commit M3**: po ewentualnych korektach z screen toura z użytkownikiem.
+- **Manualne kroki użytkownika** wciąż wiszą:
+  - Apply `0005_realtime.sql` w Supabase SQL Editor (jak w poprzednim entry).
+  - Upewnić się że dark theme rdzawy `#D97A47` wygląda OK na realnym monitorze; jeśli za dim → bumping w `globals.css`.
+
+### Build state
+- `tsc --noEmit` clean
+- `npm run build` zielony (41 routes — dochodzi `/settings/costs`)
+- Commit `37923f7` na masterze, dev server testowany po commicie
+
+### Lessons learned (Phase 10)
+- **Tokens martwe to nie tokens** — w Phase 1 zdefiniowaliśmy paletę, ale grep przez kod zwracał 0 użyć. Phase 10 zaczynała się od podpięcia `@theme inline` w Tailwind v4. Bez tego polerka byłaby ręczna w 30+ plikach.
+- **Tailwind v4 `@theme inline` mapping**: `--color-canvas: var(--bg-canvas)` w `@theme inline` → `bg-canvas` jako natywna utility. Klucz: `--color-*` prefix dla kolorów, `--font-*` dla fontów. Bez prefixów Tailwind nie generuje utilities.
+- **Source Serif 4 vs latin-ext**: Polski potrzebuje `latin-ext` w `subsets` w `next/font/google` żeby ą/ę/ł/ó renderowały się correctly. Default `["latin"]` da fallbacki i wygląda niespójnie.
+- **Custom client tabs > shadcn tabs**: nie dodawaliśmy shadcn `tabs.tsx` (kolejny radix dep); własny ItemsTabs (~30 linii) wystarczy dla 1 use-case.
+- **Sessions chrome-less via gating, nie osobny layout**: zamiast `app/(app)/sessions/layout.tsx` (skomplikuje rendering bo `(app)/layout.tsx` i tak owija children), gating w TopNav/BottomNav przez `isSessionRunPath(pathname)`. Mniej plików, ten sam efekt.
+- **Calibration buttons: ikona + tekst > pure icon**: subagent UI review proponował icon-only; w praktyce niejasne, użytkownik musi zgadywać. Kompromis: lucide ikona + skrócony tekst (`Surowo`/`Trafnie`/`Pobłażliwie` zamiast `Za surowo`/`Trafnie`/`Za pobłażliwie`).
+
+---
+
 ## 2026-05-03 — M3 Phases 1–7 (DONE), Phase 8 IN PROGRESS, 9-11 PENDING
 
 Started M3 (Polish & Mobile). Build still green at every commit. Stopped before Phase 8 to compact context. 7 commits on master.

@@ -2,9 +2,9 @@
 
 ## Current State
 
-**M1 — DONE. M2 — DONE. M3 Phases 1–7 DONE, 8–11 PENDING.** Stopped before Phase 8 to compact context. Build still green. See PROGRESS.md most-recent entry for what to pick up.
+**M1 — DONE. M2 — DONE. M3 Phases 1–10 DONE, Phase 11 PENDING.** Commit `37923f7` na masterze. Build green (41 routes), tsc clean. Zatrzymujemy się tu na test wizualny przed final close.
 
-## M3 — Polish & Mobile (in progress)
+## M3 — Polish & Mobile (Phase 11 left)
 
 ### Phase 1 — Theme system (DONE)
 ### Phase 2 — PWA manifest + icons (DONE)
@@ -13,31 +13,43 @@
 ### Phase 5 — Hamburger drawer mobile nav (DONE)
 ### Phase 6 — Offline IndexedDB queue + sync endpoint (DONE)
 ### Phase 7 — Realtime subscriptions for processing_jobs (DONE)
+### Phase 8 — Cross-device guard + voice + fresh materials (DONE)
+### Phase 9 — Error boundaries + voyageai removal (DONE)
+### Phase 10 — Reading Room visual reskin (DONE)
 
-### Phase 8 — Cross-device guard + voice + fresh materials (NEXT)
-- [ ] `lib/sessions/active-guard.ts` — check for unfinished session on another device
-- [ ] `app/api/sessions/start/route.ts` extended with `force` flag, returns 409 with payload when active session exists elsewhere
-- [ ] UI in session start pages — "Masz aktywną sesję na innym urządzeniu" prompt
-- [ ] `mode='voice'` adopted on AnswerInput in deep-dive + audit pages (the disabled mic was already added in Phase 4)
-- [ ] `components/dashboard/fresh-materials.tsx` — query 24h-old materials with no review session yet
-- [ ] Wire widget into `app/(app)/dashboard/page.tsx` above the tile grid
+### Phase 11 — Final QA + closing commit (PENDING)
 
-### Phase 9 — Error boundaries + performance (PENDING)
-- [ ] `app/error.tsx` (root) + `app/(app)/error.tsx` + `app/not-found.tsx`
-- [ ] Remove `voyageai` from package.json (Phase 1 M2 switched to raw fetch)
-- [ ] Lighthouse mobile run + per-finding fixes
-- [ ] Bundle size review (`next build` output)
+**14-punktowy smoke test (manualny, po `npm run dev`):**
+- [ ] **Tokens żywe**: `grep -r "bg-canvas\|text-fg\|border-line\|text-accent" app components` >50 trafień; `grep -r "bg-zinc-50\|emerald-500\|text-emerald" app components` 0 trafień
+- [ ] **Zmiana palety bez ruszania komponentów**: zmień `--accent` w `globals.css`, refresh — cała appka zmienia akcent
+- [ ] **Source Serif 4** widoczny na: dashboard h1 ("Dziś"), materials h1, materials/[id] h1, pytania w sesjach (review/deep-dive/audit), login ("Learning Loop")
+- [ ] **Geist Mono** w: counts (47, 612), timestamps, IDs, koszty, audyt trigger badges (7D/30D/90D)
+- [ ] **Top nav 4 itemy** desktop, **bottom nav 4 ikony** mobile (poza sesjami), active state border-accent na current route
+- [ ] **Sesja Review fullscreen**: brak topbara, pytanie wielki serif text-2xl/4xl, rating buttons w jednej linii nawet 375px, progress thin u góry
+- [ ] **Dashboard hero**: Fresh Materials renderuje na canvasie bez Card chrome, 3 actionable kafle, statystyki w jednej linijce mono. Mobile: FAB +
+- [ ] **Costs**: znika z top nav, dostępny w `/settings/costs`, banner limitu działa globalnie (test: ręcznie ustaw `monthlyTotal > SOFT_LIMIT` w bazie)
+- [ ] **Mobile single-handed** na iPhone 14 Pro emulation: wszystkie primary akcje sięgalne kciukiem (bottom 60% ekranu)
+- [ ] **Light/dark parity**: każdy ekran w obu trybach — szczególnie rdzawy `--accent` w dark (`#D97A47`); jeśli za dim podbij
+- [ ] **Cross-device prompt** (Phase 8): zacznij sesję, w drugiej karcie spróbuj startować — "Aktywna sesja na innym urządzeniu" + "Przejmij tutaj"
+- [ ] **Voice icon disabled** (Phase 4+8): w deep-dive i audyt widoczna disabled mic ikona z tooltipem
+- [ ] **Lighthouse mobile** ≥ 90 dla Performance/Accessibility/Best Practices/PWA (DevTools → Lighthouse). PWA install: Application → Manifest yes
+- [ ] **Smoke test pełnej pętli**: import DOCX → status update via Realtime → Deep Dive na fresh material → AI feedback → calibration (Surowo/Trafnie/Pobłażliwie) → end → audyt scheduled. Wszystko czytelne, bez konfuzji
 
-### Phase 10 — Visual polish (PENDING — major reskin per user)
-- [ ] `tailwind.config.ts` — palette + type scale + radius/shadow tokens (need to settle on accent — emerald-vivid was placeholder)
-- [ ] `components/shared/page-header.tsx`, `stat-tile.tsx`, `empty-state.tsx`, `severity-badge.tsx`, `section-card.tsx`, `loading-skeleton.tsx`, `confirm-button.tsx`
-- [ ] Reskin every page: dashboard, materials/*, sessions/*, gaps/*, search, costs, settings, login
+**Po smoke teście:**
+- [ ] Update `tasks/lessons.md` (jeśli pojawiły się dodatkowe gotchas)
+- [ ] Update root `CLAUDE.md` jeśli decyzje zdywergowały (palette accent, font choices, brak `tailwind.config.ts` — Tailwind v4 nie używa go w tym projekcie, brak `tailwindcss-animate`, własny ThemeProvider)
+- [ ] Final M3 commit "M3 Phase 11 — final QA + close"
 
-### Phase 11 — Final QA + docs (PENDING)
-- [ ] Walk the 14-point verification list in PROGRESS.md (Phase 1–3 plan)
-- [ ] `npm audit`, remove unused deps
-- [ ] Update lessons.md, todo.md, root CLAUDE.md if any decisions diverged from plan
-- [ ] Final M3 commit
+**Manualne kroki użytkownika (wciąż wiszą):**
+- [ ] Apply migration `0005_realtime.sql` w Supabase SQL Editor (3 idempotentne DO blocks dla `processing_jobs`/`materials`/`sessions`). Bez tego Realtime nie wystrzeli — fallback polling 5s zadziała, ale logika jest podpięta.
+- [ ] Zweryfikować rdzawy akcent w dark mode na realnym ekranie (`#D97A47`); jeśli za jasny/ciemny → bumping w `app/globals.css`.
+
+**Świadomie pozostawione poza M3:**
+- Edycja metadata materiałów (title/category/tags) na detail view — feature gap, post-M3.
+- Web Speech API integration (mamy hook).
+- Cross-topic synthesis.
+- Vercel deploy (po M3).
+- Sentry / production logging (po deploy).
 
 Full loop tested end-to-end:
 - Magic Link login → Supabase session

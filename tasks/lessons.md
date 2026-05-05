@@ -2,6 +2,17 @@
 
 Project-specific gotchas. For universal patterns see `../../global-lessons.md`.
 
+## M3 Phase 10 — Reading Room reskin
+
+- **Tokens martwe to nie tokens.** W Phase 1 zdefiniowaliśmy semantyczną paletę (`--bg-canvas`, `--accent`, etc.) ale grep przez kod zwracał 0 użyć — wszystko siedziało w `bg-zinc-50 dark:bg-black`. Phase 10 zaczynała się od podpięcia `@theme inline` w Tailwind v4, dopiero wtedy `bg-canvas` itp. działały jako natywne utility. Lekcja: jeśli definiujesz tokens, w tej samej fazie podepnij je do warstwy stylowania i zmigruj choć jeden plik na nie — inaczej rosną osobno od kodu.
+- **Tailwind v4 `@theme inline` mapping**: prefix `--color-*` dla kolorów, `--font-*` dla fontów. Wartości wskazują na CSS vars (`--color-canvas: var(--bg-canvas)`). Bez prefixów Tailwind nie generuje utilities. Ten projekt nie ma `tailwind.config.ts` — cała konfiguracja jest w `globals.css` (`@theme inline { ... }`).
+- **Source Serif 4 w `next/font/google` potrzebuje `latin-ext` dla polskiego.** Default `subsets: ["latin"]` daje fallbacki dla ą/ę/ł/ó i wygląda niespójnie. Musi być `subsets: ["latin", "latin-ext"]`.
+- **Sessions chrome-less via gating, nie osobny layout.** Plan proponował `app/(app)/sessions/layout.tsx` bez topbara, ale `(app)/layout.tsx` i tak owija children — drugi layout komplikuje. Czystsze: gating w TopNav i BottomNav przez `usePathname` + helper `isSessionRunPath()`. Mniej plików, ten sam efekt.
+- **Custom client tabs > shadcn tabs.** Dla 1 use-case (Fiszki/Pytania w `materials/[id]`) napisanie 30-linijkowego `ItemsTabs` jest tańsze niż dodanie kolejnej shadcn paczki + radix dep.
+- **Calibration buttons: ikona + skrócony tekst.** Subagent UI review proponował icon-only — w praktyce użytkownik musi zgadywać. Kompromis: lucide ikona (AlertTriangle/Check/Smile) + skrócony tekst (Surowo/Trafnie/Pobłażliwie) zamiast pełnego "Za surowo/Trafnie/Za pobłażliwie".
+- **Mechaniczny refactor: deleguj subagentowi.** 33 pliki z paterstwem `bg-zinc-* → bg-canvas` itd. — subagent z jasną mapą i regułami niejednoznacznych przypadków (emerald jako accent vs ok) zrobi 80% w jednym przejściu. Ja domknąłem ostatnie 13 plików ręcznie po tym jak subagent trafił rate-limit.
+- **OnlineIndicator pozycja vs BottomNav.** `fixed bottom-3` koliduje z bottom-nav na mobile. Fix: `bottom-20 left-3 md:bottom-3` — pill siedzi nad nav-em na mobile, w dolnym lewym rogu na desktop.
+
 ## Bootstrap
 
 - **`create-next-app` rejects directory names with spaces or capital letters.** Folder must match npm naming rules (lowercase + dashes only). Lesson learned by attempting to bootstrap into `Learning Loop/` — had to rename to `learning-loop/`.
