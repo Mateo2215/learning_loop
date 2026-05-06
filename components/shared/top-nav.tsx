@@ -1,5 +1,6 @@
 "use client";
 
+import { useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ChevronDown } from "lucide-react";
@@ -38,7 +39,6 @@ const MENU_SUB: SubItem[] = [
   { href: "/settings", label: "Ustawienia" },
 ];
 
-// All flat items used by the mobile drawer (so user has full reach in one list).
 const MOBILE_ITEMS: SubItem[] = [
   { href: "/dashboard", label: "Dziś" },
   { href: "/materials", label: "Materiały" },
@@ -50,7 +50,6 @@ export function TopNav({ email, signOutAction }: TopNavProps) {
   const pathname = usePathname() ?? "";
 
   if (isSessionRunPath(pathname)) {
-    // Sesja w toku — chrome-less.
     return null;
   }
 
@@ -63,10 +62,13 @@ export function TopNav({ email, signOutAction }: TopNavProps) {
     isPathInside(pathname, "/settings");
 
   return (
-    <header className="border-b border-line bg-surface sticky top-0 z-30">
-      <div className="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between">
-        <Link href="/dashboard" className="font-serif text-base font-medium">
-          Learning Loop
+    <header className="sticky top-0 z-30 border-b border-line/60 bg-surface/80 backdrop-blur-md">
+      <div className="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between">
+        <Link
+          href="/dashboard"
+          className="font-serif text-lg font-medium tracking-tight transition-opacity hover:opacity-80"
+        >
+          Learning <span className="text-accent">Loop</span>
         </Link>
 
         {/* Desktop */}
@@ -84,7 +86,9 @@ export function TopNav({ email, signOutAction }: TopNavProps) {
               </form>
             </DropdownMenuItem>
           </NavDropdown>
-          <ThemeToggle />
+          <div className="ml-2 pl-2 border-l border-line">
+            <ThemeToggle />
+          </div>
         </nav>
 
         {/* Mobile hamburger */}
@@ -99,12 +103,17 @@ function NavLink({ href, label, active }: { href: string; label: string; active:
     <Link
       href={href}
       className={cn(
-        "px-3 py-1.5 text-sm rounded-md transition-colors relative",
-        active ? "text-fg" : "text-muted hover:text-fg hover:bg-elevated"
+        "relative px-3 py-2 text-sm rounded-md transition-colors",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40",
+        active
+          ? "text-fg font-medium bg-elevated/60"
+          : "text-subtle hover:text-fg hover:bg-elevated"
       )}
     >
       {label}
-      {active && <span className="absolute inset-x-3 -bottom-[15px] h-0.5 bg-accent" />}
+      {active && (
+        <span className="absolute inset-x-3 -bottom-[1px] h-0.5 rounded-full bg-accent" />
+      )}
     </Link>
   );
 }
@@ -122,38 +131,80 @@ function NavDropdown({
   pathname: string;
   children?: React.ReactNode;
 }) {
+  const [open, setOpen] = useState(false);
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const cancelClose = () => {
+    if (closeTimer.current) {
+      clearTimeout(closeTimer.current);
+      closeTimer.current = null;
+    }
+  };
+
+  const handleEnter = () => {
+    cancelClose();
+    setOpen(true);
+  };
+
+  const handleLeave = () => {
+    cancelClose();
+    closeTimer.current = setTimeout(() => setOpen(false), 120);
+  };
+
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          variant="ghost"
-          size="sm"
-          className={cn(
-            "px-3 py-1.5 h-auto text-sm relative",
-            active ? "text-fg" : "text-muted hover:text-fg"
-          )}
+    <div onMouseEnter={handleEnter} onMouseLeave={handleLeave} className="relative">
+      <DropdownMenu open={open} onOpenChange={setOpen}>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="ghost"
+            size="sm"
+            className={cn(
+              "relative px-3 py-2 h-auto text-sm rounded-md transition-colors",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40",
+              "data-[state=open]:bg-elevated data-[state=open]:text-fg",
+              active
+                ? "text-fg font-medium bg-elevated/60"
+                : "text-subtle hover:text-fg hover:bg-elevated"
+            )}
+          >
+            {label}
+            <ChevronDown
+              className={cn(
+                "ml-1 h-3.5 w-3.5 opacity-60 transition-transform duration-200",
+                open && "rotate-180"
+              )}
+            />
+            {active && (
+              <span className="absolute inset-x-3 -bottom-[1px] h-0.5 rounded-full bg-accent" />
+            )}
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent
+          align="start"
+          sideOffset={8}
+          className="min-w-48"
+          onMouseEnter={handleEnter}
+          onMouseLeave={handleLeave}
         >
-          {label}
-          <ChevronDown className="ml-1 h-3.5 w-3.5 opacity-60" />
-          {active && <span className="absolute inset-x-3 -bottom-[15px] h-0.5 bg-accent" />}
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="min-w-44">
-        {items.map((item) => {
-          const itemActive = pathname === item.href || pathname.startsWith(item.href + "/");
-          return (
-            <DropdownMenuItem key={item.href} asChild>
-              <Link
-                href={item.href}
-                className={cn("text-sm w-full", itemActive && "text-accent")}
-              >
-                {item.label}
-              </Link>
-            </DropdownMenuItem>
-          );
-        })}
-        {children}
-      </DropdownMenuContent>
-    </DropdownMenu>
+          {items.map((item) => {
+            const itemActive = pathname === item.href || pathname.startsWith(item.href + "/");
+            return (
+              <DropdownMenuItem key={item.href} asChild>
+                <Link
+                  href={item.href}
+                  className={cn(
+                    "text-sm w-full",
+                    itemActive && "text-accent font-medium bg-accent-soft"
+                  )}
+                >
+                  {item.label}
+                </Link>
+              </DropdownMenuItem>
+            );
+          })}
+          {children}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
   );
 }

@@ -58,14 +58,19 @@ export default async function DashboardPage() {
 
   return (
     <>
-      <div className="max-w-4xl mx-auto px-4 py-8">
-        <h1 className="font-serif text-3xl sm:text-4xl font-medium leading-tight tracking-tight mb-8">
-          Dziś
-        </h1>
+      <div className="max-w-4xl mx-auto px-4 py-10">
+        <header className="mb-10">
+          <p className="text-xs uppercase tracking-[0.18em] text-muted font-mono mb-2">
+            {formatTodayHeader()}
+          </p>
+          <h1 className="font-serif text-4xl sm:text-5xl font-medium leading-[1.05] tracking-tight">
+            Dziś
+          </h1>
+        </header>
 
         <FreshMaterials />
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
           <StatTile
             value={dueCount ?? 0}
             label="fiszek do powtórki"
@@ -113,6 +118,14 @@ export default async function DashboardPage() {
       </Link>
     </>
   );
+}
+
+function formatTodayHeader(): string {
+  return new Date().toLocaleDateString("pl-PL", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  });
 }
 
 function formatUsd(n: number): string {

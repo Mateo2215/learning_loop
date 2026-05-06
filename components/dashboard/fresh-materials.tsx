@@ -80,16 +80,16 @@ export async function FreshMaterials() {
         </h2>
         <span className="text-[11px] uppercase tracking-wide text-muted">ostatnie 24h</span>
       </div>
-      <ul className="divide-y divide-line border-y border-line">
+      <ul className="divide-y divide-line border border-line rounded-xl bg-surface overflow-hidden shadow-sm shadow-black/[0.02] dark:shadow-black/20">
         {list.map((m) => (
           <li
             key={m.id}
-            className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 py-4"
+            className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-4 py-4 transition-colors hover:bg-elevated"
           >
             <div className="min-w-0">
               <Link
                 href={`/materials/${m.id}`}
-                className="font-serif text-lg font-medium hover:underline truncate block"
+                className="font-serif text-lg font-medium hover:text-accent transition-colors truncate block"
               >
                 {m.title}
               </Link>

@@ -22,9 +22,11 @@ export function StatTile({ value, label, emphasize = false, mono = false, href, 
   );
 
   const className = cn(
-    "block rounded-lg border bg-surface p-4 transition-colors",
-    emphasize ? "border-accent/60" : "border-line",
-    href && "hover:border-accent/60 cursor-pointer"
+    "group block rounded-xl border bg-surface p-5 transition-all duration-200",
+    "shadow-sm shadow-black/[0.02] dark:shadow-black/20",
+    emphasize ? "border-accent/60 bg-accent-soft/40" : "border-line",
+    href &&
+      "hover:border-line-strong hover:bg-elevated hover:-translate-y-0.5 hover:shadow-md hover:shadow-black/5 dark:hover:shadow-black/30 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
   );
 
   if (href) {

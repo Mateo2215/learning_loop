@@ -4,25 +4,31 @@
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
 /*
- * Reading Room palette — warm off-white canvas, deep warm-black dark, rusty
- * accent. The naming is semantic so any consumer using `bg-canvas`,
- * `text-fg`, `border-line`, `text-accent` follows the theme automatically.
+ * Warm Editorial palette — three-layer background hierarchy (sunken → canvas →
+ * surface → elevated), warm rusty primary accent, sage secondary accent.
+ * Naming is semantic so consumers using `bg-canvas`, `text-fg`, `border-line`,
+ * `text-accent` follow the theme automatically.
  */
 
 :root {
-  --bg-canvas: #FAFAF7;
+  --bg-sunken: #E8E4DB;
+  --bg-canvas: #F7F5F0;
   --bg-surface: #FFFFFF;
-  --bg-elevated: #F0EFEA;
+  --bg-elevated: #EDEAE3;
 
-  --fg-primary: #1A1A18;
+  --fg-primary: #1C1B17;
   --fg-secondary: #3D3D38;
   --fg-muted: #6B6B62;
 
-  --border-default: #DDDBD3;
-  --border-strong: #C5C3B9;
+  --border-default: #D4D0C4;
+  --border-strong: #B8B4A6;
 
-  --accent: #B8541C;
+  --accent: #A0421A;
   --accent-fg: #FFFFFF;
+  --accent-soft: #F4E4D8;
+
+  --accent-2: #2F6B5C;
+  --accent-2-soft: #DCEAE4;
 
   --success: #2E7D5E;
   --warning: #B8841C;
@@ -30,19 +36,24 @@
 }
 
 [data-theme="dark"] {
-  --bg-canvas: #0F0F0E;
-  --bg-surface: #1A1A18;
-  --bg-elevated: #252521;
+  --bg-sunken: #0F0E0B;
+  --bg-canvas: #14130F;
+  --bg-surface: #1E1C17;
+  --bg-elevated: #2A2722;
 
   --fg-primary: #F5F4F0;
   --fg-secondary: #D5D4CF;
   --fg-muted: #8A8A82;
 
-  --border-default: #2E2E29;
-  --border-strong: #3F3F39;
+  --border-default: #38342D;
+  --border-strong: #54504A;
 
-  --accent: #D97A47;
-  --accent-fg: #0F0F0E;
+  --accent: #E8915E;
+  --accent-fg: #14130F;
+  --accent-soft: #3A2418;
+
+  --accent-2: #6FBFA0;
+  --accent-2-soft: #1F2E29;
 
   --success: #5BA888;
   --warning: #D9A847;
@@ -55,6 +66,7 @@
  * are first-class Tailwind utilities just like `bg-zinc-50` was.
  */
 @theme inline {
+  --color-sunken: var(--bg-sunken);
   --color-canvas: var(--bg-canvas);
   --color-surface: var(--bg-surface);
   --color-elevated: var(--bg-elevated);
@@ -68,6 +80,10 @@
 
   --color-accent: var(--accent);
   --color-accent-fg: var(--accent-fg);
+  --color-accent-soft: var(--accent-soft);
+
+  --color-accent-2: var(--accent-2);
+  --color-accent-2-soft: var(--accent-2-soft);
 
   --color-ok: var(--success);
   --color-warn: var(--warning);

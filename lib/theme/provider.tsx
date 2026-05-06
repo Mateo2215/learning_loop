@@ -35,8 +35,8 @@ const AUTO_SWITCH_KEY = "theme_auto_switch";
 const AUTO_SWITCH_HOUR = 19;
 
 const META_COLORS: Record<ResolvedTheme, string> = {
-  light: "#fafafa",
-  dark: "#0a0a0a",
+  light: "#F7F5F0",
+  dark: "#14130F",
 };
 
 function readStoredTheme(): ThemeChoice {
@@ -57,13 +57,13 @@ function systemPrefersDark(): boolean {
 }
 
 function resolveTheme(choice: ThemeChoice, autoSwitch: boolean): ResolvedTheme {
-  if (choice === "light") return "light";
-  if (choice === "dark") return "dark";
-  // system
+  // Auto-switch overrides explicit choice — when enabled, time of day decides.
   if (autoSwitch) {
     const hour = new Date().getHours();
-    if (hour >= AUTO_SWITCH_HOUR || hour < 6) return "dark";
+    return hour >= AUTO_SWITCH_HOUR || hour < 6 ? "dark" : "light";
   }
+  if (choice === "light") return "light";
+  if (choice === "dark") return "dark";
   return systemPrefersDark() ? "dark" : "light";
 }
 
@@ -119,9 +119,9 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   // Re-evaluate every 5 minutes so auto-switch flips at 19:00 without a refresh
   useEffect(() => {
     if (!hydrated) return;
-    if (theme !== "system" || !autoSwitchEnabled) return;
+    if (!autoSwitchEnabled) return;
     const interval = setInterval(() => {
-      const resolved = resolveTheme("system", true);
+      const resolved = resolveTheme(theme, true);
       setResolvedTheme((prev) => {
         if (prev !== resolved) applyResolved(resolved);
         return resolved;
@@ -172,4 +172,4 @@ export function useTheme(): ThemeContextValue {
  * data-theme synchronously. Prevents the FOUC (flash of light theme on dark
  * users' machines).
  */
-export const THEME_INIT_SCRIPT = `(function(){try{var s=localStorage.getItem('${STORAGE_KEY}');var a=localStorage.getItem('${AUTO_SWITCH_KEY}')==='true';var resolved;if(s==='light'){resolved='light'}else if(s==='dark'){resolved='dark'}else{var h=new Date().getHours();if(a&&(h>=${AUTO_SWITCH_HOUR}||h<6)){resolved='dark'}else{resolved=window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'}}if(resolved==='dark'){document.documentElement.setAttribute('data-theme','dark')}}catch(e){}})();`;
+export const THEME_INIT_SCRIPT = `(function(){try{var s=localStorage.getItem('${STORAGE_KEY}');var a=localStorage.getItem('${AUTO_SWITCH_KEY}')==='true';var resolved;if(a){var h=new Date().getHours();resolved=(h>=${AUTO_SWITCH_HOUR}||h<6)?'dark':'light'}else if(s==='light'){resolved='light'}else if(s==='dark'){resolved='dark'}else{resolved=window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'}if(resolved==='dark'){document.documentElement.setAttribute('data-theme','dark')}}catch(e){}})();`;

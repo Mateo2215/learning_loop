@@ -181,7 +181,7 @@ export default function ImportPage() {
                   <select
                     value={category}
                     onChange={(e) => setCategory(e.target.value as Category)}
-                    className="h-9 px-3 rounded-md border border-input bg-transparent text-sm"
+                    className="h-9 px-3 rounded-md border border-line bg-surface text-fg text-sm"
                   >
                     {CATEGORIES.map((c) => (
                       <option key={c} value={c}>
