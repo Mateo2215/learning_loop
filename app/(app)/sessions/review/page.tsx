@@ -202,7 +202,8 @@ export default function ReviewSessionPage() {
   // Build side panel data from in-flight session state.
   const upcomingPanel = useMemo(() => {
     return items.slice(index + 1, index + 4).map((it) => ({
-      id: `#${it.fsrs_review_count + 1}`,
+      id: it.id,
+      displayId: `#${it.fsrs_review_count + 1}`,
       text: it.question.replace(/\{\{c1::([^}]+)\}\}/g, "______"),
       kind: "card" as const,
     }));

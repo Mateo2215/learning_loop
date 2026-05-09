@@ -19,6 +19,7 @@ export default async function DashboardPage() {
 
   const [
     { count: dueCount },
+    { count: openCount },
     { count: auditsDueCount },
     { count: freshCount },
     { data: recentMaterials },
@@ -27,6 +28,13 @@ export default async function DashboardPage() {
       .from("items")
       .select("id", { count: "exact", head: true })
       .eq("type", "cloze")
+      .eq("is_suspended", false)
+      .is("audit_id", null)
+      .lte("fsrs_due_date", nowIso),
+    supabase
+      .from("items")
+      .select("id", { count: "exact", head: true })
+      .in("type", ["open", "feynman", "scenario"])
       .eq("is_suspended", false)
       .is("audit_id", null)
       .lte("fsrs_due_date", nowIso),
@@ -48,7 +56,7 @@ export default async function DashboardPage() {
       .limit(4),
   ]);
 
-  const itemsTodayMinutes = Math.max(1, Math.round((dueCount ?? 0) * 0.6));
+  const itemsTodayMinutes = Math.max(1, Math.round(((dueCount ?? 0) + (openCount ?? 0)) * 0.6));
 
   // TODO(streak): brakuje pola w DB. Tymczasowy placeholder = 0.
   const streakDays = 0;
@@ -86,16 +94,20 @@ export default async function DashboardPage() {
           <h2 className="font-serif text-[28px] tracking-[-0.01em] text-fg">
             Dzisiejsza pętla
           </h2>
-          <p className="mt-2 text-subtle text-[14px]">
-            {dueCount === 0
-              ? "Brak fiszek do powtórki — możesz dodać nowy materiał lub zrobić Deep Dive."
-              : `${formatPl(dueCount ?? 0)} ${plural(
-                  dueCount ?? 0,
-                  "pytanie",
-                  "pytania",
-                  "pytań",
-                )} · ~${itemsTodayMinutes} min`}
-          </p>
+          {(dueCount ?? 0) === 0 && (openCount ?? 0) === 0 ? (
+            <p className="mt-2 text-subtle text-[14px]">
+              Brak pytań do powtórki — możesz dodać nowy materiał lub zrobić Deep Dive.
+            </p>
+          ) : (
+            <div className="mt-2 space-y-1">
+              <p className="text-subtle text-[14px]">
+                Fiszki: {formatPl(dueCount ?? 0)} · Pytania otwarte: {formatPl(openCount ?? 0)}
+              </p>
+              <p className="text-muted text-[13px]">
+                Przewidywany czas: ~{itemsTodayMinutes} min
+              </p>
+            </div>
+          )}
         </div>
         <Link
           href="/sessions/review"
@@ -141,21 +153,15 @@ export default async function DashboardPage() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <KPICard
             label="Pytania dziś"
-            number={formatPl(dueCount ?? 0)}
-            sub={
-              <Link href="/sessions/review" className="text-accent hover:underline">
-                Otwórz powtórki →
-              </Link>
-            }
+            number={formatPl((dueCount ?? 0) + (openCount ?? 0))}
+            sub={<span className="text-accent">Otwórz powtórki →</span>}
+            href="/sessions/review"
           />
           <KPICard
             label="Audyty zaległe"
             number={formatPl(auditsDueCount ?? 0)}
-            sub={
-              <Link href="/sessions/audit" className="text-accent hover:underline">
-                Zobacz audyty →
-              </Link>
-            }
+            sub={<span className="text-accent">Zobacz audyty →</span>}
+            href="/sessions/audit"
           />
           <KPICard
             label="Świeże materiały"

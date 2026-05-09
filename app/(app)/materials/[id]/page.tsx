@@ -15,6 +15,7 @@ import { MasteryBar } from "@/components/shared/mastery-bar";
 import { CATEGORY_LABELS, type Item, type Material } from "@/lib/db/types";
 import { ItemsTabs, type ClozeItem, type OpenItem } from "./items-tabs";
 import { GapLinkBanner } from "./gap-link-banner";
+import { DeleteMaterialButton } from "@/components/materials/delete-material-button";
 
 export default async function MaterialDetailPage({
   params,
@@ -148,6 +149,7 @@ export default async function MaterialDetailPage({
             <Play className="h-3.5 w-3.5" />
             Start sesji
           </Link>
+          <DeleteMaterialButton materialId={m.id} itemCount={itemList.length} />
         </div>
       </div>
 
@@ -163,12 +165,28 @@ export default async function MaterialDetailPage({
       {/* Title + meta + mastery */}
       <div className="flex flex-col md:flex-row gap-8 mb-10">
         <div className="md:w-[200px] shrink-0">
-          <div className="bg-elevated border border-line rounded-lg aspect-[3/4] w-full md:w-[200px] flex flex-col items-center justify-center p-4">
-            <SourceIcon className="h-12 w-12 text-muted mb-3" />
-            {m.source_filename && (
-              <span className="text-[12px] font-mono text-muted text-center line-clamp-2 break-all">
-                {m.source_filename}
-              </span>
+          <div className="rounded-lg aspect-[3/4] w-full md:w-[200px] overflow-hidden relative">
+            {m.source_type === "docx" ? (
+              <div className="absolute inset-0 bg-[#2B579A] flex flex-col items-center justify-center gap-3">
+                <FileText className="h-14 w-14 text-white/90" />
+                <span className="text-[11px] font-mono font-bold tracking-widest text-white/70">
+                  DOCX
+                </span>
+                {m.source_filename && (
+                  <span className="text-[11px] font-mono text-white/50 text-center px-4 line-clamp-2 break-all">
+                    {m.source_filename}
+                  </span>
+                )}
+              </div>
+            ) : (
+              <div className="absolute inset-0 bg-elevated border border-line flex flex-col items-center justify-center p-4">
+                <SourceIcon className="h-12 w-12 text-muted mb-3" />
+                {m.source_filename && (
+                  <span className="text-[12px] font-mono text-muted text-center line-clamp-2 break-all">
+                    {m.source_filename}
+                  </span>
+                )}
+              </div>
             )}
           </div>
         </div>

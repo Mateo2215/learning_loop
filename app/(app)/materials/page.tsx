@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Search, ArrowRight } from "lucide-react";
+import { Search, ArrowRight, Plus } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { Button } from "@/components/ui/button";
 import { Chip } from "@/components/ui/chip";
@@ -69,8 +69,11 @@ export default async function MaterialsPage({
         title="Materiały"
         sub="Twoja biblioteka pętli powtórek."
         actions={
-          <Button asChild size="sm">
-            <Link href="/materials/import">+ Nowy</Link>
+          <Button asChild className="gap-2">
+            <Link href="/materials/import">
+              <Plus className="h-4 w-4" />
+              Dodaj materiał
+            </Link>
           </Button>
         }
       />

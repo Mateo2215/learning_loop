@@ -9,6 +9,7 @@ export interface SidePanelHistoryEntry {
 
 export interface SidePanelUpcoming {
   id: string;
+  displayId?: string;
   text: string;
   kind?: "card" | "open";
 }
@@ -112,7 +113,7 @@ export function SessionSidePanel({
                     u.kind === "open" ? "text-accent-2" : "text-muted",
                   )}
                 >
-                  {u.id}
+                  {u.displayId ?? u.id}
                 </span>
                 <span
                   className={cn(

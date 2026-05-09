@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import Link from "next/link";
 import { ArrowDownRight, ArrowUpRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -11,6 +12,7 @@ export interface KPICardProps {
   trend?: KPITrend;
   trendValue?: ReactNode;
   className?: string;
+  href?: string;
 }
 
 export function KPICard({
@@ -20,11 +22,13 @@ export function KPICard({
   trend,
   trendValue,
   className,
+  href,
 }: KPICardProps) {
-  return (
+  const inner = (
     <div
       className={cn(
         "rounded-xl border border-line bg-surface p-5",
+        href && "cursor-pointer hover:border-accent transition-colors",
         className,
       )}
     >
@@ -52,4 +56,9 @@ export function KPICard({
       )}
     </div>
   );
+
+  if (href) {
+    return <Link href={href} className="block">{inner}</Link>;
+  }
+  return inner;
 }

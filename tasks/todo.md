@@ -46,6 +46,8 @@
 
 **Świadomie pozostawione poza M3:**
 - Edycja metadata materiałów (title/category/tags) na detail view — feature gap, post-M3.
+- **Tasuj** na stronie szczegółów materiału — endpoint do przetasowania kolejności items w sesji (przycisk placeholder w `app/(app)/materials/[id]/page.tsx`).
+- **Wygeneruj nowe** na stronie szczegółów materiału — wywołanie `/api/ai/generate-items` dla już istniejącego materiału, żeby dogenerować dodatkowe pytania (przycisk placeholder tamże).
 - Web Speech API integration (mamy hook).
 - Cross-topic synthesis.
 - Vercel deploy (po M3).
