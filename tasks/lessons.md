@@ -66,6 +66,13 @@ Project-specific gotchas. For universal patterns see `../../global-lessons.md`.
 
 - **`voyageai` npm SDK has broken ESM exports under Turbopack production builds.** Symptom: `npm run build` fails with "Module not found: Can't resolve '../Client'" / '../api' / '../errors' / '../local' / './ExtendedClient'. Dev server works fine because Turbopack dev resolution is more lenient. Fix: skip the SDK entirely, call the Voyage REST API directly (`POST https://api.voyageai.com/v1/embeddings` with `Authorization: Bearer $KEY`). The endpoint is trivial — `{ model, input: [text] }` in, `{ data: [{embedding}], usage }` out. No reason to keep an SDK in the bundle just for this.
 
+## M3 Phase 11 — Final QA
+
+- **Haiku generates unescaped control characters in JSON strings on dense financial content.** Symptom: `JSON.parse` throws "Expected ',' or '}' after property value" at mid-document position. Root cause: Haiku occasionally emits a literal newline or tab inside a JSON string value (e.g., inside `answer_reference` for multi-sentence definitions). Fix: try normal parse first; on failure, run a char-by-char sanitizer that replaces `\n`/`\r`/`\t` inside string positions only (tracked via `inString` + `escaped` state flags). Pure retry (same prompt) is unreliable — the fix is deterministic post-processing.
+- **`<Input type="file">` overlaps "Wybierz plik" with the selected filename** in all browsers. The native file input renders a button + text as one unit inside the styled input box. Fix: use a hidden `<input type="file" className="sr-only">` inside a `<label>` and render "Wybierz plik" and the filename as separate spans — with "Wybierz plik" hidden after selection via conditional rendering.
+- **Nav item count changed in Phase 10 (5 not 4).** Phase 11 smoke test spec said "4 itemy desktop / 4 ikony mobile" — the nav was restructured in Phase 10 to add Statystyki as a top-level item. Smoke test spec was stale. Verify nav by counting actual rendered items, not by spec.
+- **Dark accent colour is `#E8915E`, not `#D97A47`** as written in the original smoke test. The colour was tuned in Phase 10 during warm-palette work. Both are rust/orange tones; the current one has better contrast in dark mode. Update any spec references.
+
 ## M2 audits
 
 - **Audit items need a separate scope.** Audit-generated questions live in `items` (so reviews can FK to them) but with `audit_id` set. Every other reader of `items` (review queue, deep-dive picker, dashboard counts) must filter `audit_id is null`. Easy to forget — would cause regular pools to mix audit questions in. Pattern: explicit `.is("audit_id", null)` on every non-audit query.

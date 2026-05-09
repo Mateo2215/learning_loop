@@ -213,11 +213,18 @@ export default function ImportPage() {
                 {mode === "file" ? (
                   <div className="flex flex-col gap-2">
                     <label className="text-sm font-medium">Plik (DOCX, MD lub TXT, max 5 MB)</label>
-                    <Input
-                      type="file"
-                      accept=".docx,.md,.markdown,.txt"
-                      onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-                    />
+                    <label className="flex items-center gap-3 h-9 px-3 rounded-md border border-line bg-surface text-sm cursor-pointer hover:bg-elevated transition-colors">
+                      {!file && <span className="shrink-0 text-subtle">Wybierz plik</span>}
+                      <span className="truncate text-fg">
+                        {file ? file.name : <span className="text-muted">Nie wybrano pliku</span>}
+                      </span>
+                      <input
+                        type="file"
+                        accept=".docx,.md,.markdown,.txt"
+                        className="sr-only"
+                        onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+                      />
+                    </label>
                   </div>
                 ) : (
                   <div className="flex flex-col gap-2">

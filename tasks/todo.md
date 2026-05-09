@@ -19,21 +19,24 @@
 
 ### Phase 11 — Final QA + closing commit (PENDING)
 
-**14-punktowy smoke test (manualny, po `npm run dev`):**
-- [ ] **Tokens żywe**: `grep -r "bg-canvas\|text-fg\|border-line\|text-accent" app components` >50 trafień; `grep -r "bg-zinc-50\|emerald-500\|text-emerald" app components` 0 trafień
-- [ ] **Zmiana palety bez ruszania komponentów**: zmień `--accent` w `globals.css`, refresh — cała appka zmienia akcent
-- [ ] **Source Serif 4** widoczny na: dashboard h1 ("Dziś"), materials h1, materials/[id] h1, pytania w sesjach (review/deep-dive/audit), login ("Learning Loop")
-- [ ] **Geist Mono** w: counts (47, 612), timestamps, IDs, koszty, audyt trigger badges (7D/30D/90D)
-- [ ] **Top nav 4 itemy** desktop, **bottom nav 4 ikony** mobile (poza sesjami), active state border-accent na current route
-- [ ] **Sesja Review fullscreen**: brak topbara, pytanie wielki serif text-2xl/4xl, rating buttons w jednej linii nawet 375px, progress thin u góry
-- [ ] **Dashboard hero**: Fresh Materials renderuje na canvasie bez Card chrome, 3 actionable kafle, statystyki w jednej linijce mono. Mobile: FAB +
-- [ ] **Costs**: znika z top nav, dostępny w `/settings/costs`, banner limitu działa globalnie (test: ręcznie ustaw `monthlyTotal > SOFT_LIMIT` w bazie)
-- [ ] **Mobile single-handed** na iPhone 14 Pro emulation: wszystkie primary akcje sięgalne kciukiem (bottom 60% ekranu)
-- [ ] **Light/dark parity**: każdy ekran w obu trybach — szczególnie rdzawy `--accent` w dark (`#D97A47`); jeśli za dim podbij
-- [ ] **Cross-device prompt** (Phase 8): zacznij sesję, w drugiej karcie spróbuj startować — "Aktywna sesja na innym urządzeniu" + "Przejmij tutaj"
-- [ ] **Voice icon disabled** (Phase 4+8): w deep-dive i audyt widoczna disabled mic ikona z tooltipem
-- [ ] **Lighthouse mobile** ≥ 90 dla Performance/Accessibility/Best Practices/PWA (DevTools → Lighthouse). PWA install: Application → Manifest yes
-- [ ] **Smoke test pełnej pętli**: import DOCX → status update via Realtime → Deep Dive na fresh material → AI feedback → calibration (Surowo/Trafnie/Pobłażliwie) → end → audyt scheduled. Wszystko czytelne, bez konfuzji
+**Automatyczne checks (zrobione przez Claude, 2026-05-09):**
+- [x] **Tokens żywe**: 192 użycia `bg-canvas|text-fg|border-line|text-accent` w 56 plikach ✅; jedyne `text-white` to nakładki z opacity (`text-white/50` itd.) — celowe ✅
+- [x] **Source Serif 4 + latin-ext**: `app/layout.tsx` importuje z `subsets: ["latin", "latin-ext"]`, weights 400/500/600 ✅
+- [x] **Geist Mono**: importowany w `app/layout.tsx`, zmienna `--font-geist-mono` ustawiona ✅
+- [x] **Session chromeless**: `review/layout.tsx` full-bleed (`min-h-screen bg-canvas`), `AppChrome` ukrywa się przez `isSessionRunPath()` ✅
+- [x] **CostLimitBanner global**: `app/(app)/layout.tsx` przekazuje do `AppChrome` jako `banner` prop ✅
+- [x] **Voice icon disabled**: `answer-input.tsx` renderuje `<button disabled>` z `aria-label="Voice input — w przygotowaniu"` gdy `mode="voice"`; obie sesje (deep-dive, audit) przekazują `mode="voice"` ✅
+- [x] **Migration 0005**: plik `supabase/migrations/0005_realtime.sql` istnieje ✅
+- [x] **Dark accent**: `#E8915E` w dark mode (nota: smoke test wspomina `#D97A47` — kolor był poprawiony w Phase 10; wizualnie podobny rdzawy odcień, wymaga weryfikacji wzrokowej)
+- [x] **Nav**: TopNav ma 5 pozycji (Przegląd, Materiały, Sesje▾, Statystyki, Menu▾) — liczba zmieniła się w Phase 10; BottomNav ma 5 pozycji z `grid-cols-5`; aktywny stan: `bg-accent` underline ✅; Costs w podmenu "Menu" pod `/costs` (nie `/settings/costs`)
+
+**Weryfikacja manualna (2026-05-09) — DONE:**
+- [x] Paleta, fonty, nawigacja, sesje — OK
+- [x] Dashboard hero, light/dark parity — OK
+- [x] Mobile, cross-device, voice disabled — OK
+- [x] Smoke test pełnej pętli: import DOCX → Realtime → Deep Dive → AI feedback → calibration → end → audyt scheduled — OK
+- [x] Bugi znalezione i naprawione: file input UI + JSON parse error w generate-items.ts (unescaped control chars)
+- [ ] Lighthouse — odłożone do Vercel deploy (localhost nie daje miarodajnych wyników)
 
 **Po smoke teście:**
 - [ ] Update `tasks/lessons.md` (jeśli pojawiły się dodatkowe gotchas)

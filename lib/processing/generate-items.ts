@@ -73,8 +73,9 @@ export async function generateOpenQuestions(compressedContent: string): Promise<
 }
 
 /**
- * Tolerant JSON parser — strips markdown fences and leading/trailing prose
- * if the model occasionally ignores "no markdown" instruction.
+ * Tolerant JSON parser — strips markdown fences and leading/trailing prose,
+ * then fixes unescaped control characters (newlines, tabs) inside string
+ * values, which Haiku occasionally emits on dense financial/technical content.
  */
 function parseJsonStrict(text: string): unknown {
   let s = text.trim();
@@ -83,8 +84,47 @@ function parseJsonStrict(text: string): unknown {
   }
   const firstBrace = s.indexOf("{");
   const lastBrace = s.lastIndexOf("}");
-  if (firstBrace > 0 && lastBrace > firstBrace) {
+  if (firstBrace >= 0 && lastBrace > firstBrace) {
     s = s.slice(firstBrace, lastBrace + 1);
   }
-  return JSON.parse(s);
+
+  try {
+    return JSON.parse(s);
+  } catch {
+    // Second attempt: escape literal control characters inside JSON strings.
+    // Tracks parser state char-by-char so we only touch characters inside strings.
+    return JSON.parse(escapeControlCharsInStrings(s));
+  }
+}
+
+function escapeControlCharsInStrings(s: string): string {
+  let result = "";
+  let inString = false;
+  let escaped = false;
+
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    if (escaped) {
+      result += ch;
+      escaped = false;
+      continue;
+    }
+    if (ch === "\\") {
+      escaped = true;
+      result += ch;
+      continue;
+    }
+    if (ch === '"') {
+      inString = !inString;
+      result += ch;
+      continue;
+    }
+    if (inString) {
+      if (ch === "\n") { result += "\\n"; continue; }
+      if (ch === "\r") { result += "\\r"; continue; }
+      if (ch === "\t") { result += "\\t"; continue; }
+    }
+    result += ch;
+  }
+  return result;
 }
