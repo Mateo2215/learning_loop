@@ -16,7 +16,7 @@ const ClozeCardSchema = z.object({
 });
 
 const ClozeBatchSchema = z.object({
-  cards: z.array(ClozeCardSchema).min(1).max(25),
+  cards: z.array(ClozeCardSchema).min(1).max(50),
 });
 
 const OpenQuestionSchema = z.object({
