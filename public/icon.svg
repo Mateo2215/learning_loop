@@ -1,8 +1,8 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
-  <!-- Maskable safe zone: keep critical content within central 80% (51-461). -->
-  <rect width="512" height="512" rx="96" fill="#059669"/>
-  <g fill="#ffffff" font-family="-apple-system, system-ui, sans-serif" font-weight="700" font-size="240" text-anchor="middle" dominant-baseline="central">
-    <text x="256" y="256" letter-spacing="-12">LL</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  
+  <rect width="1024" height="1024" fill="#E2562B"></rect>
+  
+  <g transform="translate(132.92 132.92) scale(7.5816)">
+    <path d="M50 50&#xA;         m -4 0&#xA;         a 4 4 0 1 1 8 0&#xA;         a 10 10 0 1 1 -20 0&#xA;         a 16 16 0 1 1 32 0&#xA;         a 22 22 0 1 1 -44 0&#xA;         a 28 28 0 1 1 56 0" fill="none" stroke="#FFF6EE" stroke-width="6.5" stroke-linecap="round"></path>
   </g>
 </svg>
