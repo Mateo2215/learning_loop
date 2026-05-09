@@ -47,14 +47,37 @@
 - [ ] Apply migration `0005_realtime.sql` w Supabase SQL Editor (3 idempotentne DO blocks dla `processing_jobs`/`materials`/`sessions`). Bez tego Realtime nie wystrzeli — fallback polling 5s zadziała, ale logika jest podpięta.
 - [ ] Zweryfikować rdzawy akcent w dark mode na realnym ekranie (`#D97A47`); jeśli za jasny/ciemny → bumping w `app/globals.css`.
 
-**Świadomie pozostawione poza M3:**
-- Edycja metadata materiałów (title/category/tags) na detail view — feature gap, post-M3.
-- **Tasuj** na stronie szczegółów materiału — endpoint do przetasowania kolejności items w sesji (przycisk placeholder w `app/(app)/materials/[id]/page.tsx`).
-- **Wygeneruj nowe** na stronie szczegółów materiału — wywołanie `/api/ai/generate-items` dla już istniejącego materiału, żeby dogenerować dodatkowe pytania (przycisk placeholder tamże).
-- Web Speech API integration (mamy hook).
-- Cross-topic synthesis.
-- Vercel deploy (po M3).
-- Sentry / production logging (po deploy).
+---
+
+## Post-M3 Roadmap — co zostało do 100%
+
+### P1 — Produkcja (blokuje wszystko inne)
+
+- [ ] **Vercel deploy** — połącz repo z Vercel, ustaw env vars (NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, ANTHROPIC_API_KEY, VOYAGE_API_KEY, CRON_SECRET), zweryfikuj że build przechodzi na CI. Supabase → Auth → URL Configuration: dodaj `https://<app>.vercel.app` do Redirect URLs.
+- [ ] **Lighthouse audit na produkcji** — po deployu: DevTools → Lighthouse → Mobile. Cel: ≥90 Performance / Accessibility / Best Practices / PWA. PWA: Application → Manifest → "Add to homescreen" powinno działać.
+- [ ] **Sentry / error monitoring** — `npm install @sentry/nextjs`, `npx @sentry/wizard@latest -i nextjs`. Bez tego błędy produkcyjne są niewidoczne.
+
+### P2 — Brakujące funkcje z placeholder UI (przyciski już są, brak backendu)
+
+- [ ] **Tasuj** (`app/(app)/materials/[id]/page.tsx`) — przycisk placeholder. Backend: `POST /api/sessions/start` z `mode: 'review'` + `material_id` + `shuffle: true`. Wystarczy posortować wybrane items losowo przed zwróceniem z `selectReviewItems`.
+- [ ] **Wygeneruj nowe** (`app/(app)/materials/[id]/page.tsx`) — przycisk placeholder. Backend: `POST /api/ai/generate-items` dla istniejącego `material_id`; odczytuje `content_compressed`, wywołuje `generateClozeCards` + `generateOpenQuestions`, wstawia nowe rows do `items`. Uważaj na duplikaty (opcjonalnie: Voyage similarity check przed insertem).
+- [ ] **Edycja metadata materiału** — na detail view brak możliwości zmiany `title`, `category`, `tags`. PATCH `/api/materials/:id` już istnieje. Wystarczy dodać inline edit lub dialog (wzoruj się na `ItemEditDialog`).
+
+### P3 — Rozszerzenia (nice to have, bez twardego deadline)
+
+- [ ] **Dispute z AI** — API `POST /api/sessions/:id/dispute` już istnieje. Brakuje UI: po otrzymaniu AI feedback pokaż przycisk "Zakwestionuj" → mini-chat (max 5 tur) w sidepanelu lub modalu.
+- [ ] **Bulk import** — `POST /api/materials/import-bulk` endpoint zaplanowany w CLAUDE.md, niezaimplementowany. UI: drag-drop wielu plików + per-file kategoria + queue progress.
+- [ ] **URL import** — `POST /api/materials/import-url` endpoint zaplanowany, niezaimplementowany. Wymaga web scrapera (np. `cheerio` + `node-fetch`).
+- [ ] **Web Speech API** — hook gotowy (`mode="voice"` prop na `AnswerInput`, przycisk disabled). Implementacja: `window.SpeechRecognition` z `interimResults: true`, transcript wstrzykiwany do `value`. Fallback: ukryj przycisk jeśli API niedostępne.
+- [ ] **Cross-topic synthesis** — Sonnet generuje pytania łączące 2–3 materiały naraz. UI: multi-select materiałów na `/sessions/deep-dive`, nowy prompt w `lib/ai/prompts/`.
+- [ ] **Feynman + scenario (pełna implementacja)** — typy istnieją w schemacie, ale generacja i UI traktuje je jak `open`. Feynman: pytanie "wyjaśnij to dziecku", ocena prostoty języka. Scenario: case study + decyzja.
+- [ ] **Ghost mode** — 90-dniowe spot-checky na "mastered" materiałach (`fsrs_stability > 60`). Cron raz w tygodniu wylosowuje 3–5 itemów z pool, tworzy mini-sesję.
+
+### Notatki do następnej sesji
+
+- Zacząć od **P1 (Vercel deploy)** — bez tego Lighthouse, PWA install i Sentry nie działają.
+- **Tasuj** i **Wygeneruj nowe** to P2 z najmniejszym nakładem (godzina każde) — dobre na start po deployu.
+- Dispute UI można zrobić bez nowego API — wszystko już jest po stronie serwera.
 
 Full loop tested end-to-end:
 - Magic Link login → Supabase session
