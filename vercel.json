@@ -1,0 +1,16 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/audits",
+      "schedule": "0 */6 * * *"
+    },
+    {
+      "path": "/api/cron/gaps",
+      "schedule": "0 7 * * 1"
+    },
+    {
+      "path": "/api/cron/calibration",
+      "schedule": "0 5 * * *"
+    }
+  ]
+}

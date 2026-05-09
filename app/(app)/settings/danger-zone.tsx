@@ -1,15 +1,50 @@
 "use client";
 
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { ConfirmButton } from "@/components/shared/confirm-button";
 
 export function DangerZone() {
-  function notImplemented(action: string) {
-    toast.warning(`${action} — operacja niewdrożona`, {
-      description:
-        "Aby usunąć konto / wyczyścić dane, skontaktuj się z administratorem lub usuń projekt z poziomu Supabase.",
-    });
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+
+  async function handleClearData() {
+    setBusy(true);
+    try {
+      const res = await fetch("/api/user/clear-data", { method: "POST" });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        toast.error("Nie udało się wyczyścić danych", { description: body.error });
+        return;
+      }
+      toast.success("Dane wyczyszczone", {
+        description: "Historia powtórek usunięta, fiszki zresetowane do stanu nowych.",
+      });
+      router.refresh();
+    } catch {
+      toast.error("Błąd sieci — spróbuj ponownie");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleDeleteAccount() {
+    setBusy(true);
+    try {
+      const res = await fetch("/api/user/delete-account", { method: "POST" });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        toast.error("Nie udało się usunąć konta", { description: body.error });
+        return;
+      }
+      router.push("/login");
+    } catch {
+      toast.error("Błąd sieci — spróbuj ponownie");
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
@@ -31,7 +66,8 @@ export function DangerZone() {
         <ConfirmButton
           variant="outline"
           size="sm"
-          onConfirm={() => notImplemented("Wyczyść wszystkie dane")}
+          disabled={busy}
+          onConfirm={handleClearData}
           confirmLabel="Na pewno wyczyść?"
           className="border-bad/40 text-bad hover:bg-bad/10"
         >
@@ -40,7 +76,8 @@ export function DangerZone() {
         <ConfirmButton
           variant="outline"
           size="sm"
-          onConfirm={() => notImplemented("Usuń konto")}
+          disabled={busy}
+          onConfirm={handleDeleteAccount}
           confirmLabel="Na pewno usuń konto?"
           className="border-bad/40 text-bad hover:bg-bad/10"
         >

@@ -23,6 +23,7 @@ export default async function DashboardPage() {
     { count: auditsDueCount },
     { count: freshCount },
     { data: recentMaterials },
+    { data: reviewDates },
   ] = await Promise.all([
     supabase
       .from("items")
@@ -54,12 +55,17 @@ export default async function DashboardPage() {
       .is("deleted_at", null)
       .order("imported_at", { ascending: false })
       .limit(4),
+    // Streak: distinct UTC dates of reviews, newest first (last 90 days is enough).
+    supabase
+      .from("reviews")
+      .select("created_at")
+      .gte("created_at", new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString())
+      .order("created_at", { ascending: false }),
   ]);
 
   const itemsTodayMinutes = Math.max(1, Math.round(((dueCount ?? 0) + (openCount ?? 0)) * 0.6));
 
-  // TODO(streak): brakuje pola w DB. Tymczasowy placeholder = 0.
-  const streakDays = 0;
+  const streakDays = computeStreak(reviewDates ?? []);
   const streakSegments = Array.from({ length: 7 }, (_, i) => i < streakDays);
 
   // Items count per recent material — pobieramy w jednym zapytaniu.
@@ -265,4 +271,25 @@ function labelForCategory(c: string): string {
     ogolne: "Ogólne",
   };
   return map[c] ?? c;
+}
+
+/** Counts consecutive days (UTC) ending today on which the user had ≥1 review. */
+function computeStreak(rows: { created_at: string }[]): number {
+  const daySet = new Set(rows.map((r) => r.created_at.slice(0, 10)));
+  let streak = 0;
+  const today = new Date();
+  for (let i = 0; i < 90; i++) {
+    const d = new Date(today);
+    d.setUTCDate(today.getUTCDate() - i);
+    const key = d.toISOString().slice(0, 10);
+    if (daySet.has(key)) {
+      streak++;
+    } else if (i === 0) {
+      // No review today yet — check if yesterday starts a streak.
+      continue;
+    } else {
+      break;
+    }
+  }
+  return streak;
 }

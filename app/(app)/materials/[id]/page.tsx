@@ -2,8 +2,6 @@ import Link from "next/link";
 import { redirect, notFound } from "next/navigation";
 import {
   ArrowLeft,
-  Shuffle,
-  Sparkles,
   Play,
   FileText,
   Globe,
@@ -16,6 +14,8 @@ import { CATEGORY_LABELS, type Item, type Material } from "@/lib/db/types";
 import { ItemsTabs, type ClozeItem, type OpenItem } from "./items-tabs";
 import { GapLinkBanner } from "./gap-link-banner";
 import { DeleteMaterialButton } from "@/components/materials/delete-material-button";
+import { MaterialActions } from "./material-actions";
+import { MetadataEdit } from "./metadata-edit";
 
 export default async function MaterialDetailPage({
   params,
@@ -122,26 +122,7 @@ export default async function MaterialDetailPage({
         </nav>
 
         <div className="flex items-center gap-2">
-          {/* TODO(shuffle): wymaga endpointu — placeholder na Fazę 2. */}
-          <button
-            type="button"
-            disabled
-            className="inline-flex items-center gap-1.5 border border-line bg-surface text-muted px-3 py-1.5 rounded-lg text-[12px] cursor-not-allowed"
-            title="Wkrótce"
-          >
-            <Shuffle className="h-3.5 w-3.5" />
-            Tasuj
-          </button>
-          {/* TODO(generate-more): podpiąć API gdy dostępne. */}
-          <button
-            type="button"
-            disabled
-            className="inline-flex items-center gap-1.5 border border-line bg-surface text-muted px-3 py-1.5 rounded-lg text-[12px] cursor-not-allowed"
-            title="Wkrótce"
-          >
-            <Sparkles className="h-3.5 w-3.5" />
-            Wygeneruj nowe
-          </button>
+          <MaterialActions materialId={m.id} />
           <Link
             href={`/sessions/deep-dive/${m.id}`}
             className="inline-flex items-center gap-1.5 bg-accent text-accent-fg px-3 py-1.5 rounded-lg text-[12px] font-medium hover:opacity-90 transition-opacity"
@@ -195,7 +176,7 @@ export default async function MaterialDetailPage({
           <h1 className="font-serif text-[36px] tracking-[-0.015em] leading-[1.05] text-fg mb-4">
             {m.title}
           </h1>
-          <div className="flex flex-wrap gap-1.5 mb-6">
+          <div className="flex flex-wrap gap-1.5 mb-4">
             <Chip variant="default">{CATEGORY_LABELS[m.category]}</Chip>
             {m.tags?.map((t, i) => (
               <Chip key={`${t}-${i}`} variant="default">
@@ -204,6 +185,14 @@ export default async function MaterialDetailPage({
             ))}
             <Chip variant="default">{formatDate(m.imported_at)}</Chip>
             <Chip variant="accent">{itemList.length} pytań</Chip>
+          </div>
+          <div className="mb-6">
+            <MetadataEdit
+              materialId={m.id}
+              initialTitle={m.title}
+              initialCategory={m.category as "finanse" | "programowanie" | "ai_ml" | "soft_skills" | "ogolne"}
+              initialTags={m.tags ?? []}
+            />
           </div>
 
           <div className="max-w-xl">

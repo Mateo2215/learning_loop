@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { prepareAudit } from "@/lib/audits/scheduler";
 import { isLeechRotationDue, pickLeechCandidates } from "@/lib/db/leeches";
 import { endActiveSessions, findActiveSession } from "@/lib/sessions/active-guard";
+import { previewIntervals, type IntervalPreview } from "@/lib/fsrs/scheduler";
 import type { Item } from "@/lib/db/types";
 
 const StartBodySchema = z.object({
@@ -13,6 +14,7 @@ const StartBodySchema = z.object({
   item_count: z.number().int().min(1).max(50).default(20),
   device: z.enum(["desktop", "mobile"]).default("desktop"),
   force: z.boolean().default(false),
+  shuffle: z.boolean().default(false),
 });
 
 /**
@@ -42,7 +44,7 @@ export async function POST(request: NextRequest) {
       { status: 400 }
     );
   }
-  const { mode, material_id, audit_id, item_count, device, force } = parsed.data;
+  const { mode, material_id, audit_id, item_count, device, force, shuffle } = parsed.data;
 
   // Cross-device guard: only one active session at a time. The client can pass
   // force=true to end the existing one and take over (e.g. user confirms the
@@ -121,7 +123,7 @@ export async function POST(request: NextRequest) {
   }
 
   const items = mode === "review"
-    ? await selectReviewItems(supabase, user.id, item_count)
+    ? await selectReviewItems(supabase, user.id, item_count, { shuffle, materialId: material_id })
     : await selectDeepDiveItems(supabase, user.id, material_id!, item_count);
 
   if (items.length === 0) {
@@ -153,6 +155,15 @@ export async function POST(request: NextRequest) {
   });
 }
 
+function shuffleArray<T>(arr: T[]): T[] {
+  const out = [...arr];
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
+}
+
 /**
  * Review queue: cloze items where due_date <= now, plus newly-generated items
  * (review_count = 0). Capped at 25 new items per day to match CLAUDE.md.
@@ -161,19 +172,38 @@ export async function POST(request: NextRequest) {
  * Leech rotation (M2 Phase 3): if it's been ≥7 days since the user reviewed a
  * leech, prepend up to 2 leeches to the front of the queue regardless of due
  * date. Forces them out of the long tail.
+ *
+ * shuffle=true + materialId: returns all non-suspended cloze items from that
+ * material in random order (ignores due dates — intentional for manual review).
  */
 async function selectReviewItems(
   supabase: Awaited<ReturnType<typeof createClient>>,
   userId: string,
-  limit: number
+  limit: number,
+  options: { shuffle?: boolean; materialId?: string } = {}
 ): Promise<ReviewItem[]> {
+  const { shuffle, materialId } = options;
+
+  // Material-specific shuffled review: all cloze cards from that material.
+  if (shuffle && materialId) {
+    const { data } = await supabase
+      .from("items")
+      .select(ITEM_SELECT)
+      .eq("user_id", userId)
+      .eq("material_id", materialId)
+      .eq("type", "cloze")
+      .eq("is_suspended", false)
+      .is("audit_id", null)
+      .limit(limit);
+    return shuffleArray(withPreviews(data ?? []));
+  }
   const nowIso = new Date().toISOString();
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
 
   const { data: dueRows } = await supabase
     .from("items")
-    .select("id, material_id, type, question, answer_reference, cloze_data, difficulty, fsrs_due_date, fsrs_review_count, is_leech")
+    .select(ITEM_SELECT)
     .eq("user_id", userId)
     .eq("type", "cloze")
     .eq("is_suspended", false)
@@ -182,7 +212,7 @@ async function selectReviewItems(
     .order("fsrs_due_date", { ascending: true })
     .limit(limit);
 
-  const dueItems = (dueRows ?? []) as ReviewItem[];
+  const dueItems = withPreviews(dueRows ?? []);
 
   const { count: newSeenToday } = await supabase
     .from("reviews")
@@ -209,6 +239,7 @@ async function selectReviewItems(
   if (await isLeechRotationDue(supabase, userId)) {
     const leeches = await pickLeechCandidates(supabase, userId);
     const present = new Set(filtered.map((i) => i.id));
+    const now = new Date();
     const fresh = leeches
       .filter((l) => !present.has(l.id))
       .map<ReviewItem>((l) => ({
@@ -219,16 +250,21 @@ async function selectReviewItems(
         answer_reference: l.answer_reference,
         cloze_data: l.cloze_data,
         difficulty: l.difficulty,
+        fsrs_stability: l.fsrs_stability,
+        fsrs_difficulty: l.fsrs_difficulty,
         fsrs_due_date: l.fsrs_due_date,
+        fsrs_last_review: l.fsrs_last_review,
         fsrs_review_count: l.fsrs_review_count,
+        fsrs_lapse_count: l.fsrs_lapse_count,
         is_leech: true,
+        preview_intervals: previewIntervals(l, now),
       }));
 
     const out = [...fresh, ...filtered].slice(0, limit);
-    return out;
+    return shuffle ? shuffleArray(out) : out;
   }
 
-  return filtered;
+  return shuffle ? shuffleArray(filtered) : filtered;
 }
 
 async function selectDeepDiveItems(
@@ -239,7 +275,7 @@ async function selectDeepDiveItems(
 ): Promise<ReviewItem[]> {
   const { data } = await supabase
     .from("items")
-    .select("id, material_id, type, question, answer_reference, cloze_data, difficulty, fsrs_due_date, fsrs_review_count, is_leech")
+    .select(ITEM_SELECT)
     .eq("user_id", userId)
     .eq("material_id", materialId)
     .eq("type", "open")
@@ -248,10 +284,24 @@ async function selectDeepDiveItems(
     .order("created_at", { ascending: true })
     .limit(limit);
 
-  return (data ?? []) as ReviewItem[];
+  return withPreviews(data ?? []);
 }
+
+const ITEM_SELECT =
+  "id, material_id, type, question, answer_reference, cloze_data, difficulty, " +
+  "fsrs_stability, fsrs_difficulty, fsrs_due_date, fsrs_last_review, fsrs_review_count, fsrs_lapse_count, is_leech";
 
 type ReviewItem = Pick<
   Item,
-  "id" | "material_id" | "type" | "question" | "answer_reference" | "cloze_data" | "difficulty" | "fsrs_due_date" | "fsrs_review_count" | "is_leech"
->;
+  | "id" | "material_id" | "type" | "question" | "answer_reference" | "cloze_data"
+  | "difficulty" | "fsrs_stability" | "fsrs_difficulty" | "fsrs_due_date"
+  | "fsrs_last_review" | "fsrs_review_count" | "fsrs_lapse_count" | "is_leech"
+> & { preview_intervals: IntervalPreview };
+
+function withPreviews(rows: unknown[]): ReviewItem[] {
+  const now = new Date();
+  return (rows as Omit<ReviewItem, "preview_intervals">[]).map((item) => ({
+    ...item,
+    preview_intervals: previewIntervals(item, now),
+  }));
+}

@@ -23,6 +23,7 @@ export interface StartSessionInput {
   audit_id?: string;
   item_count?: number;
   force?: boolean;
+  shuffle?: boolean;
 }
 
 function detectDevice(): "desktop" | "mobile" {

@@ -121,6 +121,35 @@ export function initialFsrsState(now: Date = new Date()): {
   };
 }
 
+export type IntervalPreview = Record<FsrsRating, string>;
+
+/**
+ * Simulates all 4 ratings for the current item state and returns human-readable
+ * next-due labels (e.g. "10 min", "4 d") without mutating anything.
+ */
+export function previewIntervals(current: ItemFsrsState, now: Date = new Date()): IntervalPreview {
+  const card = itemToCard(current, now);
+  const log: RecordLog = SCHEDULER.repeat(card, now);
+
+  function fmt(due: Date): string {
+    const ms = due.getTime() - now.getTime();
+    const min = Math.round(ms / 60_000);
+    if (min < 60) return `${min} min`;
+    const h = Math.round(ms / 3_600_000);
+    if (h < 24) return `${h} h`;
+    const d = Math.round(ms / 86_400_000);
+    if (d < 30) return `${d} d`;
+    return `${Math.round(d / 30)} mies.`;
+  }
+
+  return {
+    1: fmt(log[Rating.Again].card.due),
+    2: fmt(log[Rating.Hard].card.due),
+    3: fmt(log[Rating.Good].card.due),
+    4: fmt(log[Rating.Easy].card.due),
+  };
+}
+
 function itemToCard(s: ItemFsrsState, now: Date): FsrsCard {
   // ts-fsrs's createEmptyCard is the canonical "new" state. For seen cards
   // we hydrate from the stored fsrs_* fields.

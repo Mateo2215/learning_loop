@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -13,7 +13,7 @@ import { ScreenMessage } from "@/components/sessions/screen-message";
 import { SessionHeader } from "@/components/sessions/session-header";
 import { CardStack3D } from "@/components/sessions/card-stack-3d";
 import { GradingButtons } from "@/components/sessions/grading-buttons";
-import { SessionSidePanel } from "@/components/sessions/session-side-panel";
+import { SessionSidePanel, type SidePanelHistoryEntry } from "@/components/sessions/session-side-panel";
 
 interface ReviewItem {
   id: string;
@@ -25,6 +25,7 @@ interface ReviewItem {
   difficulty: "easy" | "medium" | "hard" | null;
   fsrs_review_count: number;
   is_leech: boolean;
+  preview_intervals?: Partial<Record<1 | 2 | 3 | 4, string>>;
 }
 
 interface SessionStartResponse {
@@ -55,10 +56,15 @@ export default function ReviewSessionPage() {
   const [takingOver, setTakingOver] = useState(false);
   const [startedAt, setStartedAt] = useState<number | null>(null);
   const [now, setNow] = useState<number>(Date.now());
+  const [cardHistory, setCardHistory] = useState<SidePanelHistoryEntry[]>([]);
+  const lastFetchedItemId = useRef<string | null>(null);
 
   const startReview = useCallback(async (force: boolean) => {
     setPhase("loading");
-    const result = await startSession<SessionStartResponse>({ mode: "review", item_count: 20, force });
+    const stored = sessionStorage.getItem("review_options");
+    sessionStorage.removeItem("review_options");
+    const extra = stored ? (JSON.parse(stored) as { shuffle?: boolean; material_id?: string }) : {};
+    const result = await startSession<SessionStartResponse>({ mode: "review", item_count: 20, force, ...extra });
     if (result.kind === "conflict") {
       setActiveConflict(result.active);
       setPhase("conflict");
@@ -170,6 +176,20 @@ export default function ReviewSessionPage() {
     },
     [sessionId, items, index, questionShownAt]
   );
+
+  // Fetch card history whenever the active item changes.
+  useEffect(() => {
+    const item = items[index];
+    if (!item || item.id === lastFetchedItemId.current) return;
+    lastFetchedItemId.current = item.id;
+    setCardHistory([]);
+    fetch(`/api/items/${item.id}/history`)
+      .then((r) => r.ok ? r.json() : null)
+      .then((body) => {
+        if (body?.history) setCardHistory(body.history as SidePanelHistoryEntry[]);
+      })
+      .catch(() => {});
+  }, [items, index]);
 
   // Spacja = pokaż odpowiedź. Cyfry 1–4 obsługuje GradingButtons.
   useEffect(() => {
@@ -344,13 +364,13 @@ export default function ReviewSessionPage() {
               </div>
             </div>
           ) : (
-            <GradingButtons onRate={submitRating} />
+            <GradingButtons onRate={submitRating} intervals={current.preview_intervals} />
           )}
         </div>
 
         <SessionSidePanel
           sourceQuote={current.answer_reference ?? null}
-          history={undefined}
+          history={cardHistory.length > 0 ? cardHistory : undefined}
           upcoming={upcomingPanel}
           stats={sessionStats}
         />

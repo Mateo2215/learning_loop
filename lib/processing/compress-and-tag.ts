@@ -48,5 +48,5 @@ export async function autoTagMaterial(compressedContent: string): Promise<AutoTa
   let s = out.text.trim();
   if (s.startsWith("```")) s = s.replace(/^```(?:json)?\s*/, "").replace(/\s*```$/, "");
   const parsed = TagsSchema.parse(JSON.parse(s));
-  return { tags: parsed.tags, usage: out.usage };
+  return { tags: Array.from(new Set(parsed.tags)), usage: out.usage };
 }

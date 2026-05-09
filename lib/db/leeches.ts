@@ -70,8 +70,12 @@ export interface LeechCandidate {
   answer_reference: string | null;
   cloze_data: { front: string; answer: string } | null;
   difficulty: "easy" | "medium" | "hard" | null;
+  fsrs_stability: number | null;
+  fsrs_difficulty: number | null;
   fsrs_due_date: string | null;
+  fsrs_last_review: string | null;
   fsrs_review_count: number;
+  fsrs_lapse_count: number;
   is_leech: true;
 }
 
@@ -86,7 +90,7 @@ export async function pickLeechCandidates(
 ): Promise<LeechCandidate[]> {
   const { data } = await supabase
     .from("items")
-    .select("id, material_id, type, question, answer_reference, cloze_data, difficulty, fsrs_due_date, fsrs_review_count")
+    .select("id, material_id, type, question, answer_reference, cloze_data, difficulty, fsrs_stability, fsrs_difficulty, fsrs_due_date, fsrs_last_review, fsrs_review_count, fsrs_lapse_count")
     .eq("user_id", userId)
     .eq("type", "cloze")
     .eq("is_suspended", false)
