@@ -1,17 +1,17 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { TopNav } from "@/components/shared/top-nav";
-import { BottomNav } from "@/components/shared/bottom-nav";
-import { OnlineIndicator } from "@/components/shared/online-indicator";
+import { AppChrome } from "@/components/shared/app-chrome";
 import { CostLimitBanner } from "@/components/shared/cost-limit-banner";
 
 /**
- * Shared layout for all authenticated routes. TopNav handles desktop nav +
- * mobile hamburger; BottomNav adds 4-item icon bar on mobile (poza sesjami).
- * Both components hide themselves on session-run paths via `isSessionRunPath`.
+ * Shared layout for all authenticated routes. Auth check is also done in
+ * middleware (proxy.ts), but we re-check here to fail closed if the cookie
+ * is somehow stale.
  *
- * Auth check is also done in middleware (proxy.ts), but we re-check here to
- * fail closed if the cookie is somehow stale.
+ * Nav chrome (TopNav + cost banner + BottomNav + online indicator) lives in
+ * <AppChrome>, which reads the pathname and hides itself on focus-mode
+ * routes (review run, deep-dive run, audit run). This lets nested route
+ * segments inherit a clean, full-bleed canvas without re-declaring layouts.
  */
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();
@@ -27,11 +27,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="min-h-screen flex flex-col bg-canvas">
-      <TopNav email={user.email ?? null} signOutAction={signOut} />
-      <CostLimitBanner />
+      <AppChrome
+        email={user.email ?? null}
+        signOutAction={signOut}
+        banner={<CostLimitBanner />}
+      />
       <main className="flex-1 pb-16 md:pb-0">{children}</main>
-      <BottomNav />
-      <OnlineIndicator />
     </div>
   );
 }

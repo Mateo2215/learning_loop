@@ -165,9 +165,9 @@ export function SearchClient({ availableTags }: { availableTags: string[] }) {
                   )}
                   {r.tags && r.tags.length > 0 && (
                     <div className="flex flex-wrap gap-1">
-                      {r.tags.map((t) => (
+                      {r.tags.map((t, i) => (
                         <span
-                          key={t}
+                          key={`${t}-${i}`}
                           className="text-xs px-2 py-0.5 rounded-md bg-elevated text-muted"
                         >
                           {t}

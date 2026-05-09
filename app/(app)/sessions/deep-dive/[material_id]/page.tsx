@@ -3,14 +3,16 @@
 import { useState, useEffect, useCallback, use } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { AlertTriangle, Check, Smile } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Kbd } from "@/components/ui/kbd";
+import { ProgressStrip } from "@/components/shared/progress-strip";
 import { AnswerInput } from "@/components/sessions/answer-input";
+import { SessionHeader } from "@/components/sessions/session-header";
 import { startSession, type ActiveSessionInfo } from "@/lib/sessions/start-client";
 import { ActiveSessionPrompt } from "@/components/sessions/active-session-prompt";
 import { ScreenMessage } from "@/components/sessions/screen-message";
-import { SessionShell } from "@/components/sessions/session-shell";
-import { AlertTriangle, Check, Smile } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface OpenItem {
@@ -26,6 +28,7 @@ interface SessionStartResponse {
   session_id: string;
   started_at: string;
   items: OpenItem[];
+  material_title?: string | null;
 }
 
 interface AnswerResponse {
@@ -45,6 +48,7 @@ export default function DeepDivePage({ params }: { params: Promise<{ material_id
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [items, setItems] = useState<OpenItem[]>([]);
+  const [materialTitle, setMaterialTitle] = useState<string>("Deep Dive");
   const [index, setIndex] = useState(0);
   const [questionShownAt, setQuestionShownAt] = useState<number>(0);
   const [userAnswer, setUserAnswer] = useState("");
@@ -79,6 +83,7 @@ export default function DeepDivePage({ params }: { params: Promise<{ material_id
     setActiveConflict(null);
     setSessionId(data.session_id);
     setItems(data.items);
+    if (data.material_title) setMaterialTitle(data.material_title);
     setIndex(0);
     setQuestionShownAt(Date.now());
     setPhase(data.items.length === 0 ? "empty" : "answering");
@@ -171,6 +176,39 @@ export default function DeepDivePage({ params }: { params: Promise<{ material_id
     setPhase("answering");
   }, [index, items.length, sessionId]);
 
+  const handleClose = useCallback(() => {
+    if ((phase === "answering" || phase === "validating") && userAnswer.trim().length > 0) {
+      const confirmed = window.confirm("Wyjść z sesji? Niewysłana odpowiedź zostanie utracona.");
+      if (!confirmed) return;
+    }
+    if (sessionId) {
+      void fetch(`/api/sessions/${sessionId}/end`, { method: "POST" }).catch(() => {});
+    }
+    router.push("/sessions/deep-dive");
+  }, [phase, userAnswer, sessionId, router]);
+
+  // Keyboard shortcuts: Cmd/Ctrl+Enter submit, Esc close.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        handleClose();
+        return;
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+        if (phase === "answering") {
+          e.preventDefault();
+          void submitAnswer();
+        } else if (phase === "feedback") {
+          e.preventDefault();
+          void goNext();
+        }
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [phase, submitAnswer, goNext, handleClose]);
+
   if (phase === "loading") return <ScreenMessage title="Wczytuję sesję…" />;
 
   if (phase === "conflict" && activeConflict) {
@@ -230,58 +268,90 @@ export default function DeepDivePage({ params }: { params: Promise<{ material_id
   const current = items[index];
   if (!current) return null;
 
-  const progress = items.length === 0 ? 0 : Math.round((index / items.length) * 100);
-
   return (
-    <SessionShell
-      progress={progress}
-      meta={
-        <>
-          <span className="font-mono">{index + 1} / {items.length}</span>
-          <span>Deep Dive</span>
-        </>
-      }
-      bottom={
-        phase === "answering" || phase === "validating" ? (
-          <Button
-            onClick={submitAnswer}
-            disabled={phase === "validating" || userAnswer.trim().length < 3}
-            className="w-full min-h-14 text-base"
+    <div className="min-h-screen bg-canvas flex flex-col">
+      <SessionHeader
+        title={materialTitle}
+        current={index + 1}
+        total={items.length}
+        onClose={handleClose}
+        closeLabel="Zamknij"
+        right={
+          <button
+            type="button"
+            onClick={handleClose}
+            className="text-muted hover:text-fg text-[13px] transition-colors"
           >
-            {phase === "validating" ? "AI ocenia…" : "Wyślij odpowiedź"}
-          </Button>
-        ) : phase === "feedback" && feedback ? (
-          <Button onClick={() => void goNext()} className="w-full min-h-14 text-base">
-            Następne pytanie →
-          </Button>
-        ) : null
-      }
-    >
-      <h2 className="font-serif text-2xl sm:text-3xl font-normal leading-tight tracking-tight mb-6">
-        {current.question}
-      </h2>
+            Zamknij
+          </button>
+        }
+      />
 
-      {(phase === "answering" || phase === "validating") && (
-        <AnswerInput
-          value={userAnswer}
-          onChange={setUserAnswer}
-          disabled={phase === "validating"}
-          autoFocus
-          rows={6}
-          mode="voice"
-        />
-      )}
+      <div className="flex-1 flex flex-col items-center justify-center px-4 sm:px-6 py-8 sm:py-12 max-w-[720px] mx-auto w-full">
+        <div className="w-full flex flex-col gap-6">
+          <div className="text-center">
+            <div className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted mb-3">
+              Pytanie {index + 1} z {items.length}
+            </div>
+            <h2 className="font-serif text-[28px] sm:text-[36px] leading-tight tracking-[-0.015em] text-fg max-w-[640px] mx-auto">
+              {current.question}
+            </h2>
+          </div>
 
-      {phase === "feedback" && feedback && (
-        <div className="flex flex-col gap-4">
-          <FeedbackCard feedback={feedback} userAnswer={userAnswer} reference={current.answer_reference} />
-          <CalibrationButtons
-            picked={calibrationPicked}
-            onPick={(c) => void submitCalibration(c)}
-          />
+          {(phase === "answering" || phase === "validating") && (
+            <>
+              <AnswerInput
+                value={userAnswer}
+                onChange={setUserAnswer}
+                disabled={phase === "validating"}
+                autoFocus
+                rows={8}
+                mode="voice"
+                onSubmitShortcut={() => void submitAnswer()}
+              />
+
+              <div className="flex items-center justify-between text-[12px] text-muted">
+                <span className="inline-flex items-center gap-1.5">
+                  <Kbd>⌘</Kbd>
+                  <span>+</span>
+                  <Kbd>↵</Kbd>
+                  <span className="ml-1">Wyślij</span>
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <Kbd>Esc</Kbd>
+                  <span>Wyjście</span>
+                </span>
+              </div>
+
+              <Button
+                onClick={() => void submitAnswer()}
+                disabled={phase === "validating" || userAnswer.trim().length < 3}
+                className="w-full min-h-12 text-[14px]"
+              >
+                {phase === "validating" ? "AI ocenia…" : "Wyślij odpowiedź"}
+              </Button>
+            </>
+          )}
+
+          {phase === "feedback" && feedback && (
+            <div className="flex flex-col gap-4">
+              <FeedbackCard feedback={feedback} userAnswer={userAnswer} reference={current.answer_reference} />
+              <CalibrationButtons
+                picked={calibrationPicked}
+                onPick={(c) => void submitCalibration(c)}
+              />
+              <Button onClick={() => void goNext()} className="w-full min-h-12 text-[14px]">
+                Następne pytanie →
+              </Button>
+            </div>
+          )}
         </div>
-      )}
-    </SessionShell>
+      </div>
+
+      <div className="border-t border-line bg-canvas py-3 px-4 sm:px-6">
+        <ProgressStrip total={items.length} current={index} />
+      </div>
+    </div>
   );
 }
 
@@ -352,7 +422,7 @@ function CalibrationButtons({
         className={cn(
           "flex items-center justify-center gap-1.5 min-h-11 px-3 rounded-lg border text-sm transition-colors",
           active
-            ? "border-accent bg-accent/10 text-accent ring-1 ring-accent"
+            ? "border-accent bg-accent-soft text-accent ring-1 ring-accent"
             : "border-line bg-surface text-subtle hover:border-accent/40",
           disabled && !active && "opacity-50",
         )}

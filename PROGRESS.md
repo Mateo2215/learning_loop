@@ -4,6 +4,78 @@ Session handoff log. Most recent entry on top. Keep this file under 200 lines.
 
 ---
 
+## 2026-05-09 — UI Redesign v3 wg `design_handoff/` (DONE), Phase 11 still PENDING
+
+Wszystkie 10 ekranów Learning Loop przepisane na nowy design (warm editorial v3). Build green przez całą drogę. Logika biznesowa, kontrakty API i schemat DB nietknięte.
+
+### Faza 0 — Fundamenty
+- Nowe primitives w `components/ui/` i `components/shared/`: `chip.tsx`, `kbd.tsx`, `mastery-bar.tsx`, `kpi-card.tsx`, `progress-strip.tsx`, `section-header.tsx`.
+- Refaktor `components/shared/top-nav.tsx` — sticky max-w-1024, brand "Learning Loop" z accent na "Loop", dropdowny Sesje/Menu, max-h-14, theme toggle po prawej.
+- Focus mode segment layouts: `app/(app)/sessions/review/layout.tsx`, `app/(app)/sessions/deep-dive/[material_id]/layout.tsx`. `components/shared/app-chrome.tsx` (client) ukrywa TopNav/BottomNav dla session-run paths via `usePathname`. `CostLimitBanner` przekazany jako `banner` prop (server slot w client wrapperze).
+- `page-header.tsx` zachowany jako alias `SectionHeader` dla wstecznej kompatybilności.
+
+### Faza 1 — Dashboard / Materiały / Szczegół
+- `/dashboard`: greeting serif, hero "Dzisiejsza pętla" w `bg-accent-soft`, streak 7-segment bar (placeholder `streakDays = 0` — TODO field), 3× KPICard "Do zrobienia dziś", FreshMaterials restyling, snapshot 4 ostatnich materiałów.
+- `/materials`: server-side `?q=&cat=` filtrowanie, grupowanie po miesiącach (Polish locale), 2-col grid `MaterialCard` z `MasteryBar` (segmenty liczone z `fsrs_stability`: <1d=learning, 1-7d=young, 7-30d=mature/young, ≥30d=mature).
+- `/materials/[id]`: breadcrumb mono, actions row (Tasuj/Wygeneruj — disabled TODO endpointu, Start sesji), source-icon cover (DOCX/MD/URL/paste), 4-tab refaktor (`Fiszki/Pytania otwarte/Źródło/Notatki`), grid `FlashThumb` 3-col, lista `QuestionItem`.
+- Nowe komponenty: `material-card.tsx`, `flash-thumb.tsx`, `question-item.tsx`.
+
+### Faza 1.5 — Przywrócenie edycji fiszek (regresja z Fazy 1)
+- W Fazie 1 sub-agent usunął `item-list-client.tsx` (inline editing) bo nie pasowało do makiety. Endpoint `PATCH /api/items/:id` zostawał, ale UI był martwy.
+- Naprawione przez `components/materials/item-edit-dialog.tsx` — własny portal-less dialog (Radix Dialog niezainstalowany; nie dodawaliśmy zależności). Klik w `FlashThumb` lub `QuestionItem` otwiera modal z dwoma textarea (Przód/Tył lub Pytanie/Odpowiedź referencyjna). Submit → PATCH → `router.refresh()` + sonner toast. Walidacja zgodna z backend zod (question ≥5 znaków, answer ≥1).
+- Wrappery `<button>` z hover ikoną `Pencil` (lucide). Audit items są niewyedytowalne (backend zwraca 400) — UI tego nie odróżnia, użytkownik dostanie toast z błędem przy próbie zapisu (loose end).
+
+### Faza 2 — Sesje (Review + Deep Dive)
+- **Review** (focus mode): nowy `SessionHeader` z X/counter/timer, `ProgressStrip` 20-segment, `CardStack3D` (aktywna karta + 2 zblurowane warstwy za nią; reveal flow), `GradingButtons` 1-4 (Znów/Trudne/Dobrze/Łatwe) z next interval fallback, `SessionSidePanel` 296px desktop-only (Z źródła / Historia / Następne / Statystyki sesji). Timer client-side od `started_at`.
+- **Deep Dive picker** (with TopNav): 2-col grid 300px lista materiałów + preview empty state z `BookOpen` ikoną.
+- **Deep Dive active** (focus mode): centered serif question 36px, refaktor `answer-input.tsx` z floating mic button (placeholder, voice mode hook z M3 Phase 4 nadal aktywny), `Cmd/Ctrl+Enter` submit, `Esc` close z confirm. ProgressStrip footer.
+- `SessionShell` zachowany (używa go nadal `/sessions/audit/[audit_id]`).
+- **Zachowane**: optimistic advance, FSRS rating submit, offline queue, conflict resolution + take-over, leech indicator (przeniesiony do meta slotu CardStack3D), AI validation, calibration buttons, FeedbackDetails, dispute-ready feedback.
+
+### Faza 3 — Audyty / Stats / Settings / Koszty
+- `/sessions/audit`: legenda 7d/30d/90d, 3 sekcje (Zaległe `border-warn/30` / Nadchodzące / Ostatnio wykonane z score chip wg performance_score). Reuse `getDueAudits`, dwa nowe queries upcoming/completed.
+- `/stats`: 2× hero KPI (W tym tygodniu count, Skuteczność % z 30d), 4× stat cards, **`ActivityChart` 8-tygodniowy CSS-only** (bez recharts/chart.js) — stacked correct/total bars w `components/stats/activity-chart.tsx`. AI Costs preview card z linkiem do `/costs`.
+- `/settings`: max-w-720, 3-state theme radio (light/dark/system) + auto-after-19:00 checkbox, refaktor `calibration-client.tsx` (zachowane API + recompute fetch), cost progress bar do soft/hard limit, eksport JSON `<a download>` do `/api/export/json`, **nowy `danger-zone.tsx`** z double-confirm — UI gotowy, brak backendu (toast.warning że niewdrożone).
+- `/costs`: 3× summary cards (Dziś/Miesiąc/Projekcja), 2× breakdown z proporcjonalnymi barami (per operacja `bg-accent`, per model `bg-accent-2`), tabela 20 ostatnich wpisów `usage_logs` w monospace grid (scroll-x na mobile).
+
+### Bug fix — duplikujące się klucze tagów
+- React error: `Encountered two children with the same key, '#1'`. Przyczyna: niektóre materiały miały duplikaty w `materials.tags[]` (AI auto-tagger nie dedupuje), a UI używał `key={t}` przy mapowaniu.
+- Defensywny fix w 4 plikach: `components/materials/material-card.tsx`, `app/(app)/materials/[id]/page.tsx`, `app/(app)/gaps/gaps-client.tsx`, `app/(app)/gaps/[id]/detail-client.tsx`, `app/(app)/search/search-client.tsx` — klucze zmienione na `${t}-${i}`.
+- Przyczyna źródłowa nie tknięta — zob. Phase 11 outstanding.
+
+### Decyzje samodzielne (warto wiedzieć)
+- **Focus mode rozszerzony o `/sessions/audit/[id]`** w `app-chrome.tsx` — wykracza poza pierwotny plan, ale spójne z `lib/nav/paths.ts:isSessionRunPath`. Zatwierdzone przez użytkownika.
+- **Brand "Learning Loop"** zachowany zamiast "Loop" z makiet — spójność z dotychczasową identyfikacją. Zatwierdzone.
+- **Strength dots w `FlashThumb`** liczone progowo z `fsrs_stability` (null/0=0, <1d=1, <7d=2, <30d=4, ≥30d=5).
+- **Mastery segments** w MaterialCard też z `fsrs_stability` (brak osobnego pola `mastery_state` w schemacie — sensownie się mapuje).
+- **Edycja cloze** w `ItemEditDialog`: jednolite pola Przód/Tył; backend sam syncuje `cloze_data.front`/`.answer`. Brak osobnego edytora składni `{{...}}`.
+- **`SessionStartResponse`** rozszerzona o opcjonalny `material_title` (TODO w `/api/sessions/start`) — fallback "Deep Dive".
+
+### Loose ends do Fazy 11+
+- **Streak field** — placeholder 0; potrzebna agregacja albo nowe pole w bazie.
+- **Tasuj / Wygeneruj nowe na detalu materiału** — UI gotowe (`disabled`), brak endpointów.
+- **Voice input** — mic button placeholder, Web Speech API (M3 voice hooks) nadal niepodpięty.
+- **Side panel "Historia karty" w Review** — wymaga endpointu zwracającego ostatnie reviews dla `item_id`.
+- **Side panel "Z źródła"** używa `answer_reference` jako fallback — idealnie cytat z `content_compressed`.
+- **`material_title` w `/api/sessions/start`** — drobne rozszerzenie endpointu.
+- **FSRS interval preview w GradingButtons** — obecnie statyczne fallbacki (`<10min`, `1d`, `4d`, `10d`); realny preview wymaga FSRS calc client- lub server-side.
+- **Card flip animation** — obecnie prosty conditional render; pełen 3D flip do rozważenia.
+- **Audit items niewyedytowalne** — UI nie odróżnia ich wizualnie w `ItemsTabs`; user widzi błąd dopiero po kliknięciu zapisz. Filter w queryzch albo wizualne disabled.
+- **Backend dla "Wyczyść dane" / "Usuń konto"** w danger zone — UI gotowe, brak endpointów.
+- **🆕 Tag dedup** (z dzisiejszego buga): defensywny dedup w pipeline imports — `lib/processing/auto-tag.ts` lub `lib/processing/pipeline.ts` powinien `Array.from(new Set(tags.map(t => t.trim().toLowerCase()).filter(Boolean)))` przed insertem do `materials.tags`. Plus one-off SQL migration czyszczący istniejące duplikaty: `UPDATE materials SET tags = ARRAY(SELECT DISTINCT unnest(tags))`. UI fix już chroni przed crashem, ale przyczyna w bazie nadal istnieje.
+
+### Build state
+- `npm run build` zielony przez wszystkie fazy (32 routes, Turbopack, TypeScript strict clean, ESLint clean).
+- Manualna weryfikacja UI pozostaje: przeklikać 10 ekranów w obu motywach (light/dark) na 3 viewportach (375/768/1280).
+
+### Lessons learned
+- **Sub-agent może bezgłośnie usunąć funkcjonalność**, nawet z briefingiem "tylko prezentacja". W Fazie 1 inline editing fiszek został skasowany bo "makieta tego nie pokazuje". Wykrył dopiero user pytaniem "czy straciliśmy funkcjonalność tak?". Lesson: w briefingach sub-agentów wymagać explicit listy wszystkich akcji do zachowania, plus raport "co przeniosłem / czego dotknąłem".
+- **Defensywne klucze list w React**: dla pól typu `text[]` z bazy NIGDY nie używać `key={item}` bezpośrednio — tablica może mieć duplikaty. `key={`${item}-${i}`}` jest tani i bezpieczny.
+- **Tokeny CSS już zgodne z designem przed redesignem** — `app/globals.css` z M3 Phase 10 (Reading Room) były 1:1 z `tokens-v2.css` z handoffu. Phase 0 redesignu = 0 zmian w tokenach. Wartość polerki tokenów z Phase 10 zwróciła się z nawiązką.
+- **Tailwind v4 `@theme inline` mapping** sprawdza się przy redesignach: zmiana koloru = jeden var, wszystkie utility z prefixem działają od razu. Komponenty pozostają stabilne między iteracjami designu.
+
+---
+
 ## 2026-05-05 — M3 Phases 8–10 (DONE), Phase 11 PENDING
 
 Commit `37923f7`. 56 plików (+2128/-920). Build green (41 routes), tsc clean. Po tym commicie zatrzymujemy się na test wizualny przed Phase 11 (final QA + closing commit + dokumentacja smoke testów).

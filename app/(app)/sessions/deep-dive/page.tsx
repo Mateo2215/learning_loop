@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { BookOpen } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Chip } from "@/components/ui/chip";
+import { SectionHeader } from "@/components/shared/section-header";
 import { CATEGORY_LABELS, type Category, type MaterialStatus } from "@/lib/db/types";
 
 interface MaterialOption {
@@ -18,7 +20,6 @@ export default async function DeepDiveSelectorPage() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  // Materials with at least one open question.
   const { data: materials } = await supabase
     .from("materials")
     .select("id, title, category, status")
@@ -28,7 +29,6 @@ export default async function DeepDiveSelectorPage() {
 
   const materialList = (materials ?? []) as Pick<MaterialOption, "id" | "title" | "category" | "status">[];
 
-  // Count open items per material in one go.
   const counts = new Map<string, number>();
   if (materialList.length > 0) {
     const ids = materialList.map((m) => m.id);
@@ -49,45 +49,56 @@ export default async function DeepDiveSelectorPage() {
     .filter((m) => m.open_count > 0);
 
   return (
-    <div className="max-w-3xl mx-auto px-4 py-8">
-      <h1 className="text-2xl font-semibold mb-2">Deep Dive</h1>
-      <p className="text-sm text-muted mb-6">
-        Wybierz materiał, na którym chcesz przepracować pytania otwarte. AI oceni Twoje odpowiedzi.
-      </p>
+    <div className="max-w-[1024px] mx-auto px-6 py-10">
+      <SectionHeader
+        title="Deep Dive"
+        sub="Wybierz materiał i odpowiedz na pytanie otwarte. AI oceni Twoje odpowiedzi."
+      />
 
       {enriched.length === 0 ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>Brak materiałów do Deep Dive</CardTitle>
-            <CardDescription>
+        <div className="bg-surface border border-line rounded-2xl p-12 flex flex-col items-center text-center gap-4">
+          <BookOpen size={48} className="text-muted" />
+          <div>
+            <h2 className="font-serif text-[20px] font-medium mb-1">Brak materiałów do Deep Dive</h2>
+            <p className="text-[14px] text-muted max-w-md">
               Zaimportuj jakiś materiał — wygenerujemy pytania otwarte automatycznie.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button asChild>
-              <Link href="/materials/import">+ Nowy materiał</Link>
-            </Button>
-          </CardContent>
-        </Card>
+            </p>
+          </div>
+          <Button asChild>
+            <Link href="/materials/import">+ Nowy materiał</Link>
+          </Button>
+        </div>
       ) : (
-        <div className="grid gap-3">
-          {enriched.map((m) => (
-            <Link
-              key={m.id}
-              href={`/sessions/deep-dive/${m.id}`}
-              className="block rounded-lg border border-line bg-surface p-4 hover:border-accent/60 transition-colors"
-            >
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex-1 min-w-0">
-                  <h2 className="font-medium truncate">{m.title}</h2>
-                  <p className="text-xs text-muted mt-1">
-                    {CATEGORY_LABELS[m.category]} • {m.open_count} pytań otwartych
+        <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr] gap-8 mt-8">
+          <ul className="space-y-2">
+            {enriched.map((m) => (
+              <li key={m.id}>
+                <Link
+                  href={`/sessions/deep-dive/${m.id}`}
+                  className="block bg-surface border border-line rounded-xl p-4 hover:border-line-strong transition-colors"
+                >
+                  <Chip variant="default" size="sm" className="mb-2">
+                    {CATEGORY_LABELS[m.category]}
+                  </Chip>
+                  <h3 className="font-serif text-[15px] leading-snug line-clamp-2">{m.title}</h3>
+                  <p className="font-mono text-[11px] text-muted mt-2">
+                    {m.open_count} {m.open_count === 1 ? "pytanie otwarte" : "pytań otwartych"}
                   </p>
-                </div>
-                <span className="text-sm text-muted">→</span>
-              </div>
-            </Link>
-          ))}
+                </Link>
+              </li>
+            ))}
+          </ul>
+
+          <div className="bg-surface border border-line rounded-2xl p-8 lg:min-h-[360px] flex flex-col items-center justify-center text-center gap-4">
+            <div className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted">
+              Wybierz materiał
+            </div>
+            <BookOpen size={48} className="text-muted" />
+            <p className="text-[14px] text-muted max-w-sm">
+              Po wyborze materiału z listy obok zaczniesz Deep Dive — AI oceni Twoje
+              odpowiedzi i pomoże zidentyfikować luki.
+            </p>
+          </div>
         </div>
       )}
     </div>

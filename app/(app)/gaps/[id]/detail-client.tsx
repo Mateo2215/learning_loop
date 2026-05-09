@@ -112,8 +112,8 @@ export function GapDetailClient({
             <div>
               <div className="text-xs uppercase tracking-wide text-muted mb-2">Tagi</div>
               <div className="flex flex-wrap gap-1">
-                {gap.affected_tags.map((t) => (
-                  <span key={t} className="px-2 py-0.5 text-xs rounded-md bg-elevated text-muted">
+                {gap.affected_tags.map((t, i) => (
+                  <span key={`${t}-${i}`} className="px-2 py-0.5 text-xs rounded-md bg-elevated text-muted">
                     {t}
                   </span>
                 ))}

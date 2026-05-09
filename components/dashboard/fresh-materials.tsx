@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
-import { Button } from "@/components/ui/button";
 
 interface FreshMaterial {
   id: string;
@@ -15,17 +14,18 @@ function formatRelative(iso: string): string {
   const min = Math.max(1, Math.round(ms / 60000));
   if (min < 60) return `${min} min temu`;
   const h = Math.round(min / 60);
-  return `${h}h temu`;
+  return `${h} h temu`;
 }
 
 /**
- * Hero widget — surfaces materials imported in the last 24h that the user has
- * not run a deep_dive or review session for yet. Renderowane bez Card chrome
- * jako górna sekcja dashboardu — to value prop appki, nie tabela statystyk.
+ * Świeże materiały — items zaimportowane w ostatnich 24h, bez ukończonej sesji.
+ * Jeden tap → Deep Dive. Zwraca null gdy lista pusta (parent renderuje fallback).
  */
 export async function FreshMaterials() {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
   if (!user) return null;
 
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
@@ -73,36 +73,34 @@ export async function FreshMaterials() {
   }));
 
   return (
-    <section className="mb-10">
-      <div className="flex items-baseline justify-between mb-3">
-        <h2 className="font-serif text-xl font-medium leading-tight">
-          Świeży materiał <span className="text-muted text-base">— po podcaście?</span>
-        </h2>
-        <span className="text-[11px] uppercase tracking-wide text-muted">ostatnie 24h</span>
+    <section>
+      <div className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted mb-4">
+        Świeże materiały
       </div>
-      <ul className="divide-y divide-line border border-line rounded-xl bg-surface overflow-hidden shadow-sm shadow-black/[0.02] dark:shadow-black/20">
+      <ul className="rounded-xl border border-line bg-surface divide-y divide-line overflow-hidden">
         {list.map((m) => (
           <li
             key={m.id}
-            className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-4 py-4 transition-colors hover:bg-elevated"
+            className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 px-5 py-4 hover:bg-elevated transition-colors"
           >
             <div className="min-w-0">
               <Link
                 href={`/materials/${m.id}`}
-                className="font-serif text-lg font-medium hover:text-accent transition-colors truncate block"
+                className="font-serif text-[18px] tracking-[-0.005em] text-fg hover:text-accent transition-colors block truncate"
               >
                 {m.title}
               </Link>
-              <div className="text-xs text-muted font-mono mt-0.5">
+              <div className="text-muted text-[12px] font-mono uppercase tracking-[0.15em] mt-1">
                 {formatRelative(m.imported_at)} · {m.item_count} pytań
               </div>
             </div>
-            <Button asChild size="lg" className="min-h-12 self-stretch sm:self-auto">
-              <Link href={`/sessions/deep-dive/${m.id}`} className="inline-flex items-center gap-2">
-                Zacznij Deep Dive
-                <ArrowRight className="h-4 w-4" />
-              </Link>
-            </Button>
+            <Link
+              href={`/sessions/deep-dive/${m.id}`}
+              className="inline-flex items-center gap-2 text-accent text-[13px] font-medium hover:opacity-80 transition-opacity self-start md:self-auto"
+            >
+              Zacznij Deep Dive
+              <ArrowRight className="h-4 w-4" />
+            </Link>
           </li>
         ))}
       </ul>

@@ -57,11 +57,11 @@ export function TopNav({ email, signOutAction }: TopNavProps) {
     isPathInside(pathname, "/search") || isPathInside(pathname, "/settings");
 
   return (
-    <header className="sticky top-0 z-30 border-b border-line/60 bg-surface/80 backdrop-blur-md">
-      <div className="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between">
+    <header className="sticky top-0 z-40 border-b border-line bg-canvas/85 backdrop-blur">
+      <div className="max-w-[1024px] mx-auto px-6 h-14 flex items-center justify-between">
         <Link
           href="/dashboard"
-          className="font-serif text-lg font-medium tracking-tight transition-opacity hover:opacity-80"
+          className="font-serif text-[18px] font-medium tracking-tight transition-opacity hover:opacity-80"
         >
           Learning <span className="text-accent">Loop</span>
         </Link>
@@ -80,7 +80,7 @@ export function TopNav({ email, signOutAction }: TopNavProps) {
                   <form action={signOutAction}>
                     <button
                       type="submit"
-                      className="w-full text-left rounded-md px-3 py-2 text-sm text-fg transition-colors hover:bg-elevated"
+                      className="w-full text-left rounded-md px-3 py-2 text-[13px] text-fg transition-colors hover:bg-elevated"
                     >
                       Wyloguj
                     </button>
@@ -131,7 +131,7 @@ function NavLinkItem({
         <Link
           href={href}
           className={cn(
-            "relative inline-block px-3 py-2 text-sm rounded-md transition-colors",
+            "relative inline-block px-3 py-2 text-[13px] rounded-md transition-colors",
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40",
             active
               ? "text-fg font-medium bg-elevated/60"
@@ -165,7 +165,7 @@ function NavDropdown({
     <Nm.Item>
       <Nm.Trigger
         className={cn(
-          "group relative inline-flex items-center gap-1 px-3 py-2 text-sm rounded-md transition-colors",
+          "group relative inline-flex items-center gap-1 px-3 py-2 text-[13px] rounded-md transition-colors",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40",
           "data-[state=open]:bg-elevated data-[state=open]:text-fg",
           active
@@ -207,7 +207,7 @@ function NavDropdown({
                   >
                     <div
                       className={cn(
-                        "text-sm font-medium",
+                        "text-[13px] font-medium",
                         itemActive ? "text-accent" : "text-fg"
                       )}
                     >

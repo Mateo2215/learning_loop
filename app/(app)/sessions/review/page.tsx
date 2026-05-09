@@ -1,15 +1,19 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Kbd } from "@/components/ui/kbd";
+import { ProgressStrip } from "@/components/shared/progress-strip";
 import { queueReview } from "@/lib/offline/queue";
 import { startSession, type ActiveSessionInfo } from "@/lib/sessions/start-client";
 import { ActiveSessionPrompt } from "@/components/sessions/active-session-prompt";
 import { ScreenMessage } from "@/components/sessions/screen-message";
-import { SessionShell } from "@/components/sessions/session-shell";
-import { cn } from "@/lib/utils";
+import { SessionHeader } from "@/components/sessions/session-header";
+import { CardStack3D } from "@/components/sessions/card-stack-3d";
+import { GradingButtons } from "@/components/sessions/grading-buttons";
+import { SessionSidePanel } from "@/components/sessions/session-side-panel";
 
 interface ReviewItem {
   id: string;
@@ -31,6 +35,13 @@ interface SessionStartResponse {
 
 type Phase = "loading" | "empty" | "conflict" | "answering" | "revealed" | "done" | "error";
 
+function formatElapsed(ms: number): string {
+  const totalSec = Math.max(0, Math.floor(ms / 1000));
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
+  return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
+}
+
 export default function ReviewSessionPage() {
   const router = useRouter();
   const [phase, setPhase] = useState<Phase>("loading");
@@ -42,6 +53,8 @@ export default function ReviewSessionPage() {
   const [questionShownAt, setQuestionShownAt] = useState<number>(0);
   const [activeConflict, setActiveConflict] = useState<ActiveSessionInfo | null>(null);
   const [takingOver, setTakingOver] = useState(false);
+  const [startedAt, setStartedAt] = useState<number | null>(null);
+  const [now, setNow] = useState<number>(Date.now());
 
   const startReview = useCallback(async (force: boolean) => {
     setPhase("loading");
@@ -67,12 +80,20 @@ export default function ReviewSessionPage() {
     setIndex(0);
     setAnsweredCount(0);
     setQuestionShownAt(Date.now());
+    setStartedAt(new Date(data.started_at).getTime());
     setPhase(data.items.length === 0 ? "empty" : "answering");
   }, []);
 
   useEffect(() => {
     void startReview(false);
   }, [startReview]);
+
+  // Tick once per second to drive the header timer.
+  useEffect(() => {
+    if (phase !== "answering" && phase !== "revealed") return;
+    const id = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, [phase]);
 
   const submitRating = useCallback(
     (rating: 1 | 2 | 3 | 4) => {
@@ -84,8 +105,7 @@ export default function ReviewSessionPage() {
       const next = index + 1;
       const isLast = next >= items.length;
 
-      // Optimistic: advance the UI immediately. If the network call fails the
-      // toast surfaces it; the item stays in the queue for the next session.
+      // Optimistic UI: advance immediately. Background sync handles persistence.
       setAnsweredCount((n) => n + 1);
       if (isLast) {
         setPhase("done");
@@ -95,8 +115,6 @@ export default function ReviewSessionPage() {
         setPhase("answering");
       }
 
-      // Persist rating: when offline, queue to IndexedDB; when online, hit the
-      // server directly. Fire-and-forget either way.
       void (async () => {
         const offline = typeof navigator !== "undefined" && !navigator.onLine;
         if (offline) {
@@ -124,7 +142,6 @@ export default function ReviewSessionPage() {
             }),
           });
           if (!res.ok) {
-            // Network failed mid-request — fall back to queue so we don't lose the rating.
             await queueReview({
               session_id: sessionId,
               item_id: item.id,
@@ -141,7 +158,6 @@ export default function ReviewSessionPage() {
             await fetch(`/api/sessions/${sessionId}/end`, { method: "POST" });
           }
         } catch {
-          // Network died — queue for later flush.
           await queueReview({
             session_id: sessionId,
             item_id: item.id,
@@ -155,22 +171,52 @@ export default function ReviewSessionPage() {
     [sessionId, items, index, questionShownAt]
   );
 
-  // Keyboard shortcuts: space = reveal, 1-4 = rating.
+  // Spacja = pokaż odpowiedź. Cyfry 1–4 obsługuje GradingButtons.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (phase === "answering" && e.code === "Space") {
         e.preventDefault();
         setPhase("revealed");
-      } else if (phase === "revealed") {
-        if (e.key === "1") void submitRating(1);
-        else if (e.key === "2") void submitRating(2);
-        else if (e.key === "3") void submitRating(3);
-        else if (e.key === "4") void submitRating(4);
       }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [phase, submitRating]);
+  }, [phase]);
+
+  const handleClose = useCallback(() => {
+    if (phase === "answering" || phase === "revealed") {
+      const confirmed = window.confirm("Zakończyć sesję? Postęp zostanie zapisany.");
+      if (!confirmed) return;
+      if (sessionId) {
+        void fetch(`/api/sessions/${sessionId}/end`, { method: "POST" }).catch(() => {});
+      }
+    }
+    router.push("/dashboard");
+  }, [phase, router, sessionId]);
+
+  const elapsedLabel = useMemo(() => {
+    if (!startedAt) return undefined;
+    return formatElapsed(now - startedAt);
+  }, [startedAt, now]);
+
+  // Build side panel data from in-flight session state.
+  const upcomingPanel = useMemo(() => {
+    return items.slice(index + 1, index + 4).map((it) => ({
+      id: `#${it.fsrs_review_count + 1}`,
+      text: it.question.replace(/\{\{c1::([^}]+)\}\}/g, "______"),
+      kind: "card" as const,
+    }));
+  }, [items, index]);
+
+  const sessionStats = useMemo(() => {
+    const total = items.length;
+    const accuracy = answeredCount === 0 ? "—" : `${Math.round((answeredCount / total) * 100)}%`;
+    return [
+      { value: `${answeredCount}/${total}`, label: "odpowiedzi" },
+      { value: accuracy, label: "ukończono" },
+      { value: elapsedLabel ?? "00:00", label: "czas", mono: true },
+    ];
+  }, [items.length, answeredCount, elapsedLabel]);
 
   if (phase === "loading") {
     return <ScreenMessage title="Wczytuję sesję…" />;
@@ -237,95 +283,77 @@ export default function ReviewSessionPage() {
   if (!current) return null;
   const cloze = current.cloze_data;
 
-  const progress = items.length === 0 ? 0 : Math.round((answeredCount / items.length) * 100);
-
-  const meta = (
-    <>
-      <span className="font-mono">{index + 1} / {items.length}</span>
-      <span className="flex items-center gap-2">
-        {current.is_leech && (
-          <span
-            className="inline-flex items-center gap-1 text-warn"
-            title="Fiszka, której nie zapamiętujesz — wraca w rotacji co 7 dni."
-          >
-            <span className="h-2 w-2 rounded-full bg-warn" />
-            leech
-          </span>
-        )}
-        <span>{current.fsrs_review_count === 0 ? "Nowa" : `#${current.fsrs_review_count + 1}`}</span>
-      </span>
-    </>
-  );
-
   const questionText = current.question.replace(/\{\{c1::([^}]+)\}\}/g, "______");
-  const revealedText = cloze ? cloze.front.replace(/\{\{c1::([^}]+)\}\}/g, "$1") : current.question;
+  const revealedFront = cloze ? cloze.front.replace(/\{\{c1::([^}]+)\}\}/g, "$1") : current.question;
+
+  const isRevealed = phase === "revealed";
+  const remaining = items.length - index - 1;
+  const behindCount = Math.min(2, Math.max(0, remaining));
 
   return (
-    <SessionShell
-      progress={progress}
-      meta={meta}
-      hint={phase === "answering" ? "spacja = pokaż odpowiedź" : "1–4 = oceń"}
-      bottom={
-        phase === "answering" ? (
-          <Button className="w-full min-h-14 text-base" onClick={() => setPhase("revealed")}>
-            Pokaż odpowiedź
-          </Button>
-        ) : (
-          <div className="grid grid-cols-4 gap-2">
-            <RatingButton digit={1} label="Again" tone="bad" onClick={() => submitRating(1)} />
-            <RatingButton digit={2} label="Hard" tone="warn" onClick={() => submitRating(2)} />
-            <RatingButton digit={3} label="Good" tone="ok" onClick={() => submitRating(3)} />
-            <RatingButton digit={4} label="Easy" tone="accent" onClick={() => submitRating(4)} />
-          </div>
-        )
-      }
-    >
-      <p className="font-serif text-2xl sm:text-4xl font-normal leading-tight tracking-tight text-center whitespace-pre-wrap">
-        {phase === "revealed" ? revealedText : questionText}
-      </p>
-      {phase === "revealed" && cloze && (
-        <div className="mt-8 mx-auto max-w-md border-t border-line pt-6">
-          <div className="text-[10px] uppercase tracking-widest text-muted mb-2 text-center">
-            Odpowiedź
-          </div>
-          <div className="font-mono text-base text-center bg-elevated px-4 py-3 rounded-lg text-fg">
-            {cloze.answer}
-          </div>
+    <div className="min-h-screen bg-canvas flex flex-col">
+      <SessionHeader
+        current={index + 1}
+        total={items.length}
+        elapsedLabel={elapsedLabel}
+        onClose={handleClose}
+      />
+
+      <div className="px-4 sm:px-6 py-3 border-b border-line bg-canvas">
+        <ProgressStrip total={items.length} current={index} done={answeredCount} />
+      </div>
+
+      <div className="flex-1 flex min-h-0">
+        <div className="flex-1 flex flex-col items-center justify-center px-4 sm:px-6 py-10 gap-8">
+          <CardStack3D
+            frontText={isRevealed ? revealedFront : questionText}
+            backText={
+              isRevealed && current.answer_reference ? (
+                <p className="italic">{current.answer_reference}</p>
+              ) : undefined
+            }
+            isRevealed={isRevealed}
+            onReveal={() => setPhase("revealed")}
+            behindCount={behindCount}
+            meta={
+              current.is_leech ? (
+                <span className="inline-flex items-center gap-1 text-warn font-mono text-[10px] uppercase tracking-[0.18em]">
+                  <span className="h-2 w-2 rounded-full bg-warn" />
+                  leech
+                </span>
+              ) : (
+                <span className="font-mono text-[11px] text-muted">
+                  {current.fsrs_review_count === 0 ? "Nowa" : `#${current.fsrs_review_count + 1}`}
+                </span>
+              )
+            }
+          />
+
+          {!isRevealed ? (
+            <div className="flex flex-col items-center gap-3">
+              <Button
+                onClick={() => setPhase("revealed")}
+                className="bg-accent text-accent-fg hover:bg-accent/90 px-6 py-3 rounded-lg font-medium text-[14px] inline-flex items-center gap-2 min-h-12"
+              >
+                Pokaż odpowiedź
+              </Button>
+              <div className="text-[12px] text-muted flex items-center gap-2">
+                <Kbd>Spacja</Kbd>
+                <span>aby pokazać</span>
+              </div>
+            </div>
+          ) : (
+            <GradingButtons onRate={submitRating} />
+          )}
         </div>
-      )}
-    </SessionShell>
-  );
-}
 
-function RatingButton({
-  digit,
-  label,
-  tone,
-  onClick,
-}: {
-  digit: number;
-  label: string;
-  tone: "bad" | "warn" | "ok" | "accent";
-  onClick: () => void;
-}) {
-  const toneClass = {
-    bad: "border-bad/40 hover:bg-bad/10 hover:border-bad",
-    warn: "border-warn/40 hover:bg-warn/10 hover:border-warn",
-    ok: "border-ok/40 hover:bg-ok/10 hover:border-ok",
-    accent: "border-accent/40 hover:bg-accent/10 hover:border-accent",
-  }[tone];
-
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        "min-h-16 rounded-lg border bg-surface flex flex-col items-center justify-center gap-0.5 transition-colors",
-        toneClass
-      )}
-    >
-      <span className="font-serif text-2xl leading-none">{digit}</span>
-      <span className="text-[10px] uppercase tracking-wide text-muted">{label}</span>
-    </button>
+        <SessionSidePanel
+          sourceQuote={current.answer_reference ?? null}
+          history={undefined}
+          upcoming={upcomingPanel}
+          stats={sessionStats}
+        />
+      </div>
+    </div>
   );
 }

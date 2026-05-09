@@ -4,11 +4,11 @@ import { createClient } from "@/lib/supabase/server";
 import { CalibrationSection } from "./calibration-client";
 import { ExportSection } from "./export-client";
 import { ThemeSection } from "./theme-section";
+import { DangerZone } from "./danger-zone";
 import { CATEGORY_LABELS, type Category } from "@/lib/db/types";
-import { PageHeader } from "@/components/shared/page-header";
+import { SectionHeader } from "@/components/shared/section-header";
 import { getMonthlyUsage } from "@/lib/ai/limits";
 import { COST_LIMITS } from "@/lib/ai/pricing";
-import { SectionCard } from "@/components/shared/section-card";
 
 interface OffsetRow {
   category: Category;
@@ -20,7 +20,9 @@ interface OffsetRow {
 
 export default async function SettingsPage() {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
   const { data: offsets } = await supabase
@@ -43,41 +45,62 @@ export default async function SettingsPage() {
   const softPct = Math.min(100, (monthlyUsd / COST_LIMITS.monthlySoftUsd) * 100);
 
   return (
-    <div className="max-w-3xl mx-auto px-4 py-8">
-      <PageHeader
+    <div className="max-w-[720px] mx-auto px-6 py-10">
+      <SectionHeader
         title="Ustawienia"
-        description={
+        sub={
           <>
-            Konto: <span className="font-mono">{user.email}</span>
+            Konto: <span className="font-mono text-subtle">{user.email}</span>
           </>
         }
       />
 
-      <div className="space-y-6">
+      <div className="space-y-4 mt-6">
         <ThemeSection />
         <CalibrationSection initialRows={rows} />
 
-        <SectionCard
-          title="Koszty"
-          description={`${formatUsd(monthlyUsd)} / ${formatUsd(COST_LIMITS.monthlySoftUsd)} miękki limit miesięczny`}
-          action={
+        <section className="bg-surface border border-line rounded-2xl p-6">
+          <div className="flex items-start justify-between gap-4 mb-4">
+            <div>
+              <h3 className="font-serif text-[18px] font-medium leading-none">Koszty</h3>
+              <p className="mt-2 text-[13px] text-muted leading-relaxed">
+                <span className="font-mono text-subtle">{formatUsd(monthlyUsd)}</span>
+                {" "}/{" "}
+                <span className="font-mono">{formatUsd(COST_LIMITS.monthlySoftUsd)}</span>
+                {" "}miękki limit miesięczny ·{" "}
+                <span className="font-mono">{formatUsd(COST_LIMITS.monthlyHardUsd)}</span>
+                {" "}twardy
+              </p>
+            </div>
             <Link
-              href="/settings/costs"
-              className="text-sm text-accent hover:underline"
+              href="/costs"
+              className="text-[13px] font-medium text-accent hover:opacity-80 whitespace-nowrap"
             >
               Szczegóły →
             </Link>
-          }
-        >
-          <div className="h-1.5 w-full bg-elevated rounded-full overflow-hidden">
+          </div>
+          <div className="relative h-3 w-full bg-elevated rounded-full overflow-hidden">
             <div
-              className="h-full bg-accent transition-all"
+              className="absolute inset-y-0 left-0 bg-accent transition-all"
               style={{ width: `${softPct.toFixed(1)}%` }}
             />
+            <div
+              aria-hidden
+              className="absolute inset-y-0 w-px bg-warn/60"
+              style={{ left: "100%" }}
+              title="Soft limit"
+            />
           </div>
-        </SectionCard>
+          <div className="mt-2 flex justify-between text-[10px] font-mono uppercase tracking-[0.15em] text-muted">
+            <span>$0</span>
+            <span className="text-warn">soft ${COST_LIMITS.monthlySoftUsd}</span>
+            <span className="text-bad">hard ${COST_LIMITS.monthlyHardUsd}</span>
+          </div>
+        </section>
 
         <ExportSection />
+
+        <DangerZone />
       </div>
     </div>
   );

@@ -114,8 +114,8 @@ export function GapsClient({ initialGaps }: { initialGaps: KnowledgeGap[] }) {
               </div>
               {g.affected_tags.length > 0 && (
                 <div className="flex flex-wrap gap-1 mb-3">
-                  {g.affected_tags.map((t) => (
-                    <Tag key={t}>{t}</Tag>
+                  {g.affected_tags.map((t, i) => (
+                    <Tag key={`${t}-${i}`}>{t}</Tag>
                   ))}
                 </div>
               )}
