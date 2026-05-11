@@ -34,7 +34,7 @@ export default async function DashboardPage() {
       .lte("fsrs_due_date", nowIso),
     supabase
       .from("items")
-      .select("material_id")
+      .select("id, material_id")
       .in("type", ["open", "feynman", "scenario"])
       .eq("is_suspended", false)
       .is("audit_id", null),
@@ -62,26 +62,16 @@ export default async function DashboardPage() {
       .order("created_at", { ascending: false }),
   ]);
 
-  // Group open items by material_id for the Deep Dive section.
-  const openByMaterial = new Map<string, number>();
-  for (const row of openItemsData ?? []) {
-    const id = (row as { material_id: string }).material_id;
-    openByMaterial.set(id, (openByMaterial.get(id) ?? 0) + 1);
-  }
-  const topDeepDiveIds = [...openByMaterial.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 3)
-    .map(([id]) => id);
-
   const itemsTodayMinutes = Math.max(1, Math.round((dueCount ?? 0) * 0.6));
 
   const streakDays = computeStreak(reviewDates ?? []);
   const streakSegments = Array.from({ length: 7 }, (_, i) => i < streakDays);
 
-  // Items count per recent material — pobieramy w jednym zapytaniu.
+  // Round 2: count library items per material + find which open items were already answered.
   const recentIds = (recentMaterials ?? []).map((m) => m.id);
+  const openItemIds = (openItemsData ?? []).map((i) => (i as { id: string }).id);
   let countByMaterial = new Map<string, number>();
-  let deepDiveMaterials: { id: string; title: string }[] = [];
+  let reviewedOpenIds = new Set<string>();
 
   await Promise.all([
     (async () => {
@@ -96,15 +86,40 @@ export default async function DashboardPage() {
       }
     })(),
     (async () => {
-      if (topDeepDiveIds.length === 0) return;
-      const { data } = await supabase
-        .from("materials")
-        .select("id, title")
-        .in("id", topDeepDiveIds)
-        .is("deleted_at", null);
-      deepDiveMaterials = (data ?? []) as { id: string; title: string }[];
+      if (openItemIds.length === 0) return;
+      const { data: reviewedRows } = await supabase
+        .from("reviews")
+        .select("item_id")
+        .in("item_id", openItemIds);
+      reviewedOpenIds = new Set(
+        (reviewedRows ?? []).map((r) => (r as { item_id: string }).item_id)
+      );
     })(),
   ]);
+
+  // Group only unanswered open items by material.
+  const openByMaterial = new Map<string, number>();
+  for (const row of openItemsData ?? []) {
+    const item = row as { id: string; material_id: string };
+    if (!reviewedOpenIds.has(item.id)) {
+      openByMaterial.set(item.material_id, (openByMaterial.get(item.material_id) ?? 0) + 1);
+    }
+  }
+  const topDeepDiveIds = [...openByMaterial.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+    .map(([id]) => id);
+
+  // Round 3: fetch material titles for the Deep Dive section.
+  let deepDiveMaterials: { id: string; title: string }[] = [];
+  if (topDeepDiveIds.length > 0) {
+    const { data } = await supabase
+      .from("materials")
+      .select("id, title")
+      .in("id", topDeepDiveIds)
+      .is("deleted_at", null);
+    deepDiveMaterials = (data ?? []) as { id: string; title: string }[];
+  }
 
   return (
     <div className="max-w-[1024px] mx-auto px-6 py-10 space-y-10">
