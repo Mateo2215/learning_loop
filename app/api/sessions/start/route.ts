@@ -201,7 +201,7 @@ async function selectReviewItems(
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
 
-  const { data: dueRows } = await supabase
+  const { data: dueRows, error: dueError } = await supabase
     .from("items")
     .select(ITEM_SELECT)
     .eq("user_id", userId)
@@ -211,6 +211,8 @@ async function selectReviewItems(
     .lte("fsrs_due_date", nowIso)
     .order("fsrs_due_date", { ascending: true })
     .limit(limit);
+
+  console.log("[review-debug] dueRows:", dueRows?.length, "dueError:", dueError?.message);
 
   const dueItems = withPreviews(dueRows ?? []);
 
@@ -240,6 +242,7 @@ async function selectReviewItems(
   }
 
   const newBudget = Math.max(0, 25 - newSeenToday);
+  console.log("[review-debug] todayItemIds:", todayItemIds.length, "newSeenToday:", newSeenToday, "newBudget:", newBudget, "dueItems:", dueItems.length);
 
   const filtered: ReviewItem[] = [];
   let newAdded = 0;
