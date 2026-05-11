@@ -148,6 +148,42 @@ export default async function DashboardPage() {
         </Link>
       </section>
 
+      {/* Deep Dive — hero card style */}
+      {deepDiveMaterials.length > 0 && (
+        <section className="rounded-2xl bg-elevated border border-line p-8">
+          <div className="mb-5">
+            <h2 className="font-serif text-[28px] tracking-[-0.01em] text-fg">Deep Dive</h2>
+            <p className="mt-1 text-muted text-[13px]">Pytania otwarte wymagające Twojej odpowiedzi</p>
+          </div>
+          <div className="space-y-4">
+            {deepDiveMaterials.map((m, i) => {
+              const count = openByMaterial.get(m.id) ?? 0;
+              return (
+                <div key={m.id} className="flex items-center justify-between gap-4">
+                  <div className="min-w-0">
+                    <div className={i === 0 ? "text-[15px] text-fg font-medium truncate" : "text-[14px] text-subtle truncate"}>
+                      {m.title}
+                    </div>
+                    <div className="text-[12px] text-muted mt-0.5">
+                      {formatPl(count)} {plural(count, "pytanie otwarte", "pytania otwarte", "pytań otwartych")}
+                    </div>
+                  </div>
+                  <Link
+                    href={`/sessions/deep-dive/${m.id}`}
+                    className={i === 0
+                      ? "shrink-0 bg-accent text-accent-fg px-4 py-2 rounded-lg text-[13px] font-medium hover:opacity-90 transition-opacity whitespace-nowrap"
+                      : "shrink-0 border border-line text-subtle px-4 py-2 rounded-lg text-[13px] hover:text-fg transition-colors whitespace-nowrap"
+                    }
+                  >
+                    Zacznij →
+                  </Link>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
       {/* Streak */}
       <section>
         <div className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted mb-3">
@@ -200,36 +236,6 @@ export default async function DashboardPage() {
           />
         </div>
       </section>
-
-      {/* Deep Dive */}
-      {deepDiveMaterials.length > 0 && (
-        <section>
-          <div className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted mb-4">
-            Deep Dive
-          </div>
-          <div className="rounded-xl border border-line bg-surface divide-y divide-line overflow-hidden">
-            {deepDiveMaterials.map((m) => {
-              const count = openByMaterial.get(m.id) ?? 0;
-              return (
-                <div key={m.id} className="flex items-center justify-between gap-4 px-5 py-4">
-                  <div className="min-w-0">
-                    <div className="font-serif text-[16px] text-fg truncate">{m.title}</div>
-                    <div className="text-[12px] text-muted mt-0.5">
-                      {formatPl(count)} {plural(count, "pytanie otwarte", "pytania otwarte", "pytań otwartych")}
-                    </div>
-                  </div>
-                  <Link
-                    href={`/sessions/deep-dive/${m.id}`}
-                    className="shrink-0 bg-accent text-accent-fg px-3 py-1.5 rounded-lg text-[13px] font-medium hover:opacity-90 transition-opacity whitespace-nowrap"
-                  >
-                    Zacznij →
-                  </Link>
-                </div>
-              );
-            })}
-          </div>
-        </section>
-      )}
 
       {/* Świeże materiały */}
       <FreshMaterials />
