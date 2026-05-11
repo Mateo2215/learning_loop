@@ -37,8 +37,7 @@ export default async function DashboardPage() {
       .select("id", { count: "exact", head: true })
       .in("type", ["open", "feynman", "scenario"])
       .eq("is_suspended", false)
-      .is("audit_id", null)
-      .lte("fsrs_due_date", nowIso),
+      .is("audit_id", null),
     supabase
       .from("topic_audits")
       .select("id", { count: "exact", head: true })

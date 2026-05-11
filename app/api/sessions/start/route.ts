@@ -214,15 +214,32 @@ async function selectReviewItems(
 
   const dueItems = withPreviews(dueRows ?? []);
 
-  const { count: newSeenToday } = await supabase
+  // Count distinct NEW items introduced today (items with no reviews before today).
+  // We avoid counting review rows directly — a card pressed "Again" multiple times
+  // would inflate the counter and incorrectly exhaust the daily new-card budget.
+  const { data: todayReviewData } = await supabase
     .from("reviews")
-    .select("id", { count: "exact", head: true })
+    .select("item_id")
     .eq("user_id", userId)
     .gte("created_at", todayStart.toISOString())
     .gt("fsrs_rating", 0);
 
-  const newAlreadyReviewed = newSeenToday ?? 0;
-  const newBudget = Math.max(0, 25 - newAlreadyReviewed);
+  const todayItemIds = [...new Set((todayReviewData ?? []).map((r) => (r as { item_id: string }).item_id))];
+
+  let newSeenToday = todayItemIds.length;
+  if (todayItemIds.length > 0) {
+    const { data: priorReviewData } = await supabase
+      .from("reviews")
+      .select("item_id")
+      .eq("user_id", userId)
+      .in("item_id", todayItemIds)
+      .lt("created_at", todayStart.toISOString());
+
+    const priorSet = new Set((priorReviewData ?? []).map((r) => (r as { item_id: string }).item_id));
+    newSeenToday = todayItemIds.filter((id) => !priorSet.has(id)).length;
+  }
+
+  const newBudget = Math.max(0, 25 - newSeenToday);
 
   const filtered: ReviewItem[] = [];
   let newAdded = 0;
