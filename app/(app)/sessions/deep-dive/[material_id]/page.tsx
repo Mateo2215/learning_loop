@@ -70,7 +70,7 @@ export default function DeepDivePage({ params }: { params: Promise<{ material_id
       setPhase("conflict");
       return;
     }
-    if (result.kind === "empty") {
+    if (result.kind === "empty" || result.kind === "cap_reached") {
       setPhase("empty");
       return;
     }

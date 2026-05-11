@@ -14,6 +14,7 @@ export interface ActiveSessionInfo {
 export type StartSessionResult<T> =
   | { kind: "ok"; data: T }
   | { kind: "empty" }
+  | { kind: "cap_reached"; blocked: number }
   | { kind: "conflict"; active: ActiveSessionInfo }
   | { kind: "error"; message: string };
 
@@ -24,6 +25,7 @@ export interface StartSessionInput {
   item_count?: number;
   force?: boolean;
   shuffle?: boolean;
+  bypass_new_limit?: boolean;
 }
 
 function detectDevice(): "desktop" | "mobile" {
@@ -52,6 +54,14 @@ export async function startSession<T>(input: StartSessionInput): Promise<StartSe
   }
 
   if (res.status === 404) return { kind: "empty" };
+
+  if (res.status === 422) {
+    const body = await res.json().catch(() => ({}));
+    if (body?.error === "new_card_limit_reached") {
+      return { kind: "cap_reached", blocked: body.blocked as number };
+    }
+    return { kind: "error", message: body?.error ?? "HTTP 422" };
+  }
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));

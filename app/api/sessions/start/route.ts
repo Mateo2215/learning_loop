@@ -7,6 +7,8 @@ import { endActiveSessions, findActiveSession } from "@/lib/sessions/active-guar
 import { previewIntervals, type IntervalPreview } from "@/lib/fsrs/scheduler";
 import type { Item } from "@/lib/db/types";
 
+const DAILY_NEW_CARD_LIMIT = 50;
+
 const StartBodySchema = z.object({
   mode: z.enum(["review", "deep_dive", "audit"]),
   material_id: z.string().uuid().optional(),
@@ -15,6 +17,7 @@ const StartBodySchema = z.object({
   device: z.enum(["desktop", "mobile"]).default("desktop"),
   force: z.boolean().default(false),
   shuffle: z.boolean().default(false),
+  bypass_new_limit: z.boolean().default(false),
 });
 
 /**
@@ -44,7 +47,7 @@ export async function POST(request: NextRequest) {
       { status: 400 }
     );
   }
-  const { mode, material_id, audit_id, item_count, device, force, shuffle } = parsed.data;
+  const { mode, material_id, audit_id, item_count, device, force, shuffle, bypass_new_limit } = parsed.data;
 
   // Cross-device guard: only one active session at a time. The client can pass
   // force=true to end the existing one and take over (e.g. user confirms the
@@ -122,9 +125,41 @@ export async function POST(request: NextRequest) {
     });
   }
 
-  const items = mode === "review"
-    ? await selectReviewItems(supabase, user.id, item_count, { shuffle, materialId: material_id })
-    : await selectDeepDiveItems(supabase, user.id, material_id!, item_count);
+  if (mode === "review") {
+    const result = await selectReviewItems(supabase, user.id, item_count, {
+      shuffle,
+      materialId: material_id,
+      bypassNewLimit: bypass_new_limit,
+    });
+
+    if (result.kind === "cap_reached") {
+      return NextResponse.json(
+        { error: "new_card_limit_reached", blocked: result.blocked },
+        { status: 422 },
+      );
+    }
+
+    if (result.items.length === 0) {
+      return NextResponse.json({ error: "no_items_available" }, { status: 404 });
+    }
+
+    const { data: session, error: sessionErr } = await supabase
+      .from("sessions")
+      .insert({ user_id: user.id, mode, items_planned: result.items.length, device: "desktop" })
+      .select("id, started_at")
+      .single();
+
+    if (sessionErr || !session) {
+      return NextResponse.json(
+        { error: `session insert failed: ${sessionErr?.message}` },
+        { status: 500 },
+      );
+    }
+
+    return NextResponse.json({ session_id: session.id, started_at: session.started_at, items: result.items });
+  }
+
+  const items = await selectDeepDiveItems(supabase, user.id, material_id!, item_count);
 
   if (items.length === 0) {
     return NextResponse.json({ error: "no_items_available" }, { status: 404 });
@@ -176,13 +211,17 @@ function shuffleArray<T>(arr: T[]): T[] {
  * shuffle=true + materialId: returns all non-suspended cloze items from that
  * material in random order (ignores due dates — intentional for manual review).
  */
+type SelectReviewResult =
+  | { kind: "ok"; items: ReviewItem[] }
+  | { kind: "cap_reached"; blocked: number };
+
 async function selectReviewItems(
   supabase: Awaited<ReturnType<typeof createClient>>,
   userId: string,
   limit: number,
-  options: { shuffle?: boolean; materialId?: string } = {}
-): Promise<ReviewItem[]> {
-  const { shuffle, materialId } = options;
+  options: { shuffle?: boolean; materialId?: string; bypassNewLimit?: boolean } = {}
+): Promise<SelectReviewResult> {
+  const { shuffle, materialId, bypassNewLimit } = options;
 
   // Material-specific shuffled review: all cloze cards from that material.
   if (shuffle && materialId) {
@@ -195,13 +234,13 @@ async function selectReviewItems(
       .eq("is_suspended", false)
       .is("audit_id", null)
       .limit(limit);
-    return shuffleArray(withPreviews(data ?? []));
+    return { kind: "ok", items: shuffleArray(withPreviews(data ?? [])) };
   }
   const nowIso = new Date().toISOString();
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
 
-  const { data: dueRows, error: dueError } = await supabase
+  const { data: dueRows } = await supabase
     .from("items")
     .select(ITEM_SELECT)
     .eq("user_id", userId)
@@ -211,8 +250,6 @@ async function selectReviewItems(
     .lte("fsrs_due_date", nowIso)
     .order("fsrs_due_date", { ascending: true })
     .limit(limit);
-
-  console.log("[review-debug] dueRows:", dueRows?.length, "dueError:", dueError?.message);
 
   const dueItems = withPreviews(dueRows ?? []);
 
@@ -241,8 +278,7 @@ async function selectReviewItems(
     newSeenToday = todayItemIds.filter((id) => !priorSet.has(id)).length;
   }
 
-  const newBudget = Math.max(0, 25 - newSeenToday);
-  console.log("[review-debug] todayItemIds:", todayItemIds.length, "newSeenToday:", newSeenToday, "newBudget:", newBudget, "dueItems:", dueItems.length);
+  const newBudget = bypassNewLimit ? limit : Math.max(0, DAILY_NEW_CARD_LIMIT - newSeenToday);
 
   const filtered: ReviewItem[] = [];
   let newAdded = 0;
@@ -253,6 +289,11 @@ async function selectReviewItems(
     }
     filtered.push(item);
     if (filtered.length >= limit) break;
+  }
+
+  // When the cap blocked all items, signal the caller so it can offer a bypass.
+  if (filtered.length === 0 && dueItems.some((i) => i.fsrs_review_count === 0) && newBudget === 0) {
+    return { kind: "cap_reached", blocked: dueItems.filter((i) => i.fsrs_review_count === 0).length };
   }
 
   // Leech rotation: prepend due-rotation leeches that aren't already in the queue.
@@ -281,10 +322,10 @@ async function selectReviewItems(
       }));
 
     const out = [...fresh, ...filtered].slice(0, limit);
-    return shuffle ? shuffleArray(out) : out;
+    return { kind: "ok", items: shuffle ? shuffleArray(out) : out };
   }
 
-  return shuffle ? shuffleArray(filtered) : filtered;
+  return { kind: "ok", items: shuffle ? shuffleArray(filtered) : filtered };
 }
 
 async function selectDeepDiveItems(

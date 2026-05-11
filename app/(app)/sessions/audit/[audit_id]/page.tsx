@@ -82,7 +82,7 @@ export default function AuditRunPage({ params }: { params: Promise<{ audit_id: s
       setPhase("conflict");
       return;
     }
-    if (result.kind === "error" || result.kind === "empty") {
+    if (result.kind === "error" || result.kind === "empty" || result.kind === "cap_reached") {
       setPhase("error");
       setErrorMessage(result.kind === "error" ? result.message : "Brak pytań w audycie.");
       return;

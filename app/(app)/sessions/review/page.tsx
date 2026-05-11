@@ -34,7 +34,7 @@ interface SessionStartResponse {
   items: ReviewItem[];
 }
 
-type Phase = "loading" | "empty" | "conflict" | "answering" | "revealed" | "done" | "error";
+type Phase = "loading" | "empty" | "cap_reached" | "conflict" | "answering" | "revealed" | "done" | "error";
 
 function formatElapsed(ms: number): string {
   const totalSec = Math.max(0, Math.floor(ms / 1000));
@@ -52,6 +52,7 @@ export default function ReviewSessionPage() {
   const [index, setIndex] = useState(0);
   const [answeredCount, setAnsweredCount] = useState(0);
   const [questionShownAt, setQuestionShownAt] = useState<number>(0);
+  const [capBlocked, setCapBlocked] = useState<number>(0);
   const [activeConflict, setActiveConflict] = useState<ActiveSessionInfo | null>(null);
   const [takingOver, setTakingOver] = useState(false);
   const [startedAt, setStartedAt] = useState<number | null>(null);
@@ -68,6 +69,11 @@ export default function ReviewSessionPage() {
     if (result.kind === "conflict") {
       setActiveConflict(result.active);
       setPhase("conflict");
+      return;
+    }
+    if (result.kind === "cap_reached") {
+      setCapBlocked(result.blocked);
+      setPhase("cap_reached");
       return;
     }
     if (result.kind === "empty") {
@@ -257,6 +263,43 @@ export default function ReviewSessionPage() {
           onCancel={() => router.push("/dashboard")}
         />
       </div>
+    );
+  }
+
+  if (phase === "cap_reached") {
+    return (
+      <ScreenMessage
+        title="Dzienny limit nowych kart"
+        description={`Na dziś wprowadzono już 50 nowych fiszek. Pozostałe ${capBlocked} czekają na jutro — albo możesz powtórzyć je teraz mimo limitu.`}
+        action={
+          <div className="flex gap-2">
+            <Button
+              onClick={async () => {
+                setPhase("loading");
+                const stored = sessionStorage.getItem("review_options");
+                sessionStorage.removeItem("review_options");
+                const extra = stored ? (JSON.parse(stored) as { shuffle?: boolean; material_id?: string }) : {};
+                const result = await startSession<SessionStartResponse>({ mode: "review", item_count: 20, force: false, bypass_new_limit: true, ...extra });
+                if (result.kind === "ok") {
+                  const data = result.data;
+                  setSessionId(data.session_id);
+                  setItems(data.items);
+                  setIndex(0);
+                  setAnsweredCount(0);
+                  setQuestionShownAt(Date.now());
+                  setStartedAt(new Date(data.started_at).getTime());
+                  setPhase(data.items.length === 0 ? "empty" : "answering");
+                } else {
+                  setPhase("empty");
+                }
+              }}
+            >
+              Powtórz mimo limitu →
+            </Button>
+            <Button variant="outline" onClick={() => router.push("/dashboard")}>← Dashboard</Button>
+          </div>
+        }
+      />
     );
   }
 
