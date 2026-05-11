@@ -19,7 +19,7 @@ export default async function DashboardPage() {
 
   const [
     { count: dueCount },
-    { count: openCount },
+    { data: openItemsData },
     { count: auditsDueCount },
     { count: freshCount },
     { data: recentMaterials },
@@ -34,7 +34,7 @@ export default async function DashboardPage() {
       .lte("fsrs_due_date", nowIso),
     supabase
       .from("items")
-      .select("id", { count: "exact", head: true })
+      .select("material_id")
       .in("type", ["open", "feynman", "scenario"])
       .eq("is_suspended", false)
       .is("audit_id", null),
@@ -62,7 +62,18 @@ export default async function DashboardPage() {
       .order("created_at", { ascending: false }),
   ]);
 
-  const itemsTodayMinutes = Math.max(1, Math.round(((dueCount ?? 0) + (openCount ?? 0)) * 0.6));
+  // Group open items by material_id for the Deep Dive section.
+  const openByMaterial = new Map<string, number>();
+  for (const row of openItemsData ?? []) {
+    const id = (row as { material_id: string }).material_id;
+    openByMaterial.set(id, (openByMaterial.get(id) ?? 0) + 1);
+  }
+  const topDeepDiveIds = [...openByMaterial.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+    .map(([id]) => id);
+
+  const itemsTodayMinutes = Math.max(1, Math.round((dueCount ?? 0) * 0.6));
 
   const streakDays = computeStreak(reviewDates ?? []);
   const streakSegments = Array.from({ length: 7 }, (_, i) => i < streakDays);
@@ -70,16 +81,30 @@ export default async function DashboardPage() {
   // Items count per recent material — pobieramy w jednym zapytaniu.
   const recentIds = (recentMaterials ?? []).map((m) => m.id);
   let countByMaterial = new Map<string, number>();
-  if (recentIds.length > 0) {
-    const { data: itemRows } = await supabase
-      .from("items")
-      .select("material_id")
-      .in("material_id", recentIds);
-    for (const row of itemRows ?? []) {
-      const id = (row as { material_id: string }).material_id;
-      countByMaterial.set(id, (countByMaterial.get(id) ?? 0) + 1);
-    }
-  }
+  let deepDiveMaterials: { id: string; title: string }[] = [];
+
+  await Promise.all([
+    (async () => {
+      if (recentIds.length === 0) return;
+      const { data: itemRows } = await supabase
+        .from("items")
+        .select("material_id")
+        .in("material_id", recentIds);
+      for (const row of itemRows ?? []) {
+        const id = (row as { material_id: string }).material_id;
+        countByMaterial.set(id, (countByMaterial.get(id) ?? 0) + 1);
+      }
+    })(),
+    (async () => {
+      if (topDeepDiveIds.length === 0) return;
+      const { data } = await supabase
+        .from("materials")
+        .select("id, title")
+        .in("id", topDeepDiveIds)
+        .is("deleted_at", null);
+      deepDiveMaterials = (data ?? []) as { id: string; title: string }[];
+    })(),
+  ]);
 
   return (
     <div className="max-w-[1024px] mx-auto px-6 py-10 space-y-10">
@@ -99,17 +124,17 @@ export default async function DashboardPage() {
           <h2 className="font-serif text-[28px] tracking-[-0.01em] text-fg">
             Dzisiejsza pętla
           </h2>
-          {(dueCount ?? 0) === 0 && (openCount ?? 0) === 0 ? (
+          {(dueCount ?? 0) === 0 ? (
             <p className="mt-2 text-subtle text-[14px]">
-              Brak pytań do powtórki — możesz dodać nowy materiał lub zrobić Deep Dive.
+              Brak fiszek do powtórki — możesz dodać nowy materiał lub zrobić Deep Dive.
             </p>
           ) : (
             <div className="mt-2 space-y-1">
               <p className="text-subtle text-[14px]">
-                Fiszki: {formatPl(dueCount ?? 0)} · Pytania otwarte: {formatPl(openCount ?? 0)}
+                {formatPl(dueCount ?? 0)} {plural(dueCount ?? 0, "fiszka", "fiszki", "fiszek")} do powtórki
               </p>
               <p className="text-muted text-[13px]">
-                Przewidywany czas: ~{itemsTodayMinutes} min
+                Przewidywany czas: ~{itemsTodayMinutes} min · Opanowane wracają max co 6 mies.
               </p>
             </div>
           )}
@@ -157,8 +182,8 @@ export default async function DashboardPage() {
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <KPICard
-            label="Pytania dziś"
-            number={formatPl((dueCount ?? 0) + (openCount ?? 0))}
+            label="Fiszki dziś"
+            number={formatPl(dueCount ?? 0)}
             sub={<span className="text-accent">Otwórz powtórki →</span>}
             href="/sessions/review"
           />
@@ -175,6 +200,36 @@ export default async function DashboardPage() {
           />
         </div>
       </section>
+
+      {/* Deep Dive */}
+      {deepDiveMaterials.length > 0 && (
+        <section>
+          <div className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted mb-4">
+            Deep Dive
+          </div>
+          <div className="rounded-xl border border-line bg-surface divide-y divide-line overflow-hidden">
+            {deepDiveMaterials.map((m) => {
+              const count = openByMaterial.get(m.id) ?? 0;
+              return (
+                <div key={m.id} className="flex items-center justify-between gap-4 px-5 py-4">
+                  <div className="min-w-0">
+                    <div className="font-serif text-[16px] text-fg truncate">{m.title}</div>
+                    <div className="text-[12px] text-muted mt-0.5">
+                      {formatPl(count)} {plural(count, "pytanie otwarte", "pytania otwarte", "pytań otwartych")}
+                    </div>
+                  </div>
+                  <Link
+                    href={`/sessions/deep-dive/${m.id}`}
+                    className="shrink-0 bg-accent text-accent-fg px-3 py-1.5 rounded-lg text-[13px] font-medium hover:opacity-90 transition-opacity whitespace-nowrap"
+                  >
+                    Zacznij →
+                  </Link>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
 
       {/* Świeże materiały */}
       <FreshMaterials />

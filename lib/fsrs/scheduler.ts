@@ -21,7 +21,7 @@ import type { Item } from "@/lib/db/types";
 
 const PARAMS = generatorParameters({
   request_retention: 0.9,
-  maximum_interval: 365,
+  maximum_interval: 180,
   enable_fuzz: true,
 });
 
