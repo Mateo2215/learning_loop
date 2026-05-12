@@ -5,6 +5,7 @@
 
 import { z } from "zod";
 import { complete } from "@/lib/ai/anthropic";
+import { parseAIJson } from "@/lib/ai/json";
 import { COMPRESS_SYSTEM_PROMPT } from "@/lib/ai/prompts/compress";
 import { AUTO_TAG_SYSTEM_PROMPT } from "@/lib/ai/prompts/auto-tag";
 import type { TokenUsage } from "@/lib/ai/pricing";
@@ -45,8 +46,6 @@ export async function autoTagMaterial(compressedContent: string): Promise<AutoTa
     cacheSystemPrompt: true,
   });
 
-  let s = out.text.trim();
-  if (s.startsWith("```")) s = s.replace(/^```(?:json)?\s*/, "").replace(/\s*```$/, "");
-  const parsed = TagsSchema.parse(JSON.parse(s));
+  const parsed = TagsSchema.parse(parseAIJson(out.text));
   return { tags: Array.from(new Set(parsed.tags)), usage: out.usage };
 }
