@@ -24,10 +24,10 @@ interface Spec {
 }
 
 const SPECS: Spec[] = [
-  { rating: 1, label: "Znów", tone: "bad", fallbackInterval: "<10 min" },
-  { rating: 2, label: "Trudne", tone: "warn", fallbackInterval: "1 d" },
-  { rating: 3, label: "Dobrze", tone: "ok", fallbackInterval: "4 d" },
-  { rating: 4, label: "Łatwe", tone: "accent-2", fallbackInterval: "10 d" },
+  { rating: 1, label: "Nie pamiętam", tone: "bad", fallbackInterval: "1 min" },
+  { rating: 2, label: "Z trudem", tone: "warn", fallbackInterval: "6 min" },
+  { rating: 3, label: "Pamiętam", tone: "ok", fallbackInterval: "10 min" },
+  { rating: 4, label: "Znam dobrze", tone: "accent-2", fallbackInterval: "8 d" },
 ];
 
 const TONE_CLASSES: Record<Spec["tone"], string> = {

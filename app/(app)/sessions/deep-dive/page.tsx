@@ -15,6 +15,13 @@ interface MaterialOption {
   open_count: number;
 }
 
+interface ActiveDeepDive {
+  material_id: string;
+  material_title: string;
+  completed: number;
+  planned: number;
+}
+
 export default async function DeepDiveSelectorPage() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -48,12 +55,72 @@ export default async function DeepDiveSelectorPage() {
     .map((m) => ({ ...m, open_count: counts.get(m.id) ?? 0 }))
     .filter((m) => m.open_count > 0);
 
+  let activeDeepDive: ActiveDeepDive | null = null;
+  const { data: activeSession } = await supabase
+    .from("sessions")
+    .select("id, material_id, planned_item_ids, items_planned, started_at")
+    .eq("user_id", user.id)
+    .eq("mode", "deep_dive")
+    .is("ended_at", null)
+    .not("material_id", "is", null)
+    .order("started_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (activeSession) {
+    const active = activeSession as {
+      id: string;
+      material_id: string | null;
+      planned_item_ids: string[] | null;
+      items_planned: number | null;
+    };
+    const material = active.material_id
+      ? enriched.find((m) => m.id === active.material_id)
+      : null;
+
+    if (active.material_id && material) {
+      const { count } = await supabase
+        .from("reviews")
+        .select("id", { count: "exact", head: true })
+        .eq("session_id", active.id);
+      const planned = active.planned_item_ids?.length || active.items_planned || material.open_count;
+      const completed = count ?? 0;
+      if (completed < planned) {
+        activeDeepDive = {
+          material_id: active.material_id,
+          material_title: material.title,
+          completed,
+          planned,
+        };
+      }
+    }
+  }
+
   return (
     <div className="max-w-[1024px] mx-auto px-6 py-10">
       <SectionHeader
         title="Deep Dive"
         sub="Wybierz materiał i odpowiedz na pytanie otwarte. AI oceni Twoje odpowiedzi."
       />
+
+      {activeDeepDive && (
+        <div className="mt-6 rounded-lg border border-accent/35 bg-accent-soft px-5 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <div className="font-mono text-[11px] uppercase tracking-[0.18em] text-accent mb-1">
+              W toku
+            </div>
+            <h2 className="font-serif text-[18px] leading-tight text-fg">
+              {activeDeepDive.material_title}
+            </h2>
+            <p className="text-sm text-muted mt-1">
+              {activeDeepDive.completed} z {activeDeepDive.planned} pytań ukończonych
+            </p>
+          </div>
+          <Button asChild className="min-h-10">
+            <Link href={`/sessions/deep-dive/${activeDeepDive.material_id}`}>Kontynuuj</Link>
+          </Button>
+        </div>
+      )}
 
       {enriched.length === 0 ? (
         <div className="bg-surface border border-line rounded-2xl p-12 flex flex-col items-center text-center gap-4">
@@ -75,11 +142,20 @@ export default async function DeepDiveSelectorPage() {
               <li key={m.id}>
                 <Link
                   href={`/sessions/deep-dive/${m.id}`}
-                  className="block bg-surface border border-line rounded-xl p-4 hover:border-line-strong transition-colors"
+                  className={`block bg-surface border rounded-xl p-4 hover:border-line-strong transition-colors ${
+                    activeDeepDive?.material_id === m.id ? "border-accent/60" : "border-line"
+                  }`}
                 >
-                  <Chip variant="default" size="sm" className="mb-2">
-                    {CATEGORY_LABELS[m.category]}
-                  </Chip>
+                  <div className="flex items-center gap-2 mb-2">
+                    <Chip variant="default" size="sm">
+                      {CATEGORY_LABELS[m.category]}
+                    </Chip>
+                    {activeDeepDive?.material_id === m.id && (
+                      <span className="font-mono text-[10px] uppercase tracking-wide text-accent">
+                        Kontynuuj
+                      </span>
+                    )}
+                  </div>
                   <h3 className="font-serif text-[15px] leading-snug line-clamp-2">{m.title}</h3>
                   <p className="font-mono text-[11px] text-muted mt-2">
                     {m.open_count} {m.open_count === 1 ? "pytanie otwarte" : "pytań otwartych"}

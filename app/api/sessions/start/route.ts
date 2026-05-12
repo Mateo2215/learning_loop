@@ -3,7 +3,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { prepareAudit } from "@/lib/audits/scheduler";
 import { isLeechRotationDue, pickLeechCandidates } from "@/lib/db/leeches";
-import { endActiveSessions, findActiveSession } from "@/lib/sessions/active-guard";
+import { endActiveSessions, findActiveSession, type ActiveSession } from "@/lib/sessions/active-guard";
 import { previewIntervals, type IntervalPreview } from "@/lib/fsrs/scheduler";
 import type { Item } from "@/lib/db/types";
 
@@ -49,9 +49,36 @@ export async function POST(request: NextRequest) {
   }
   const { mode, material_id, audit_id, item_count, device, force, shuffle, bypass_new_limit } = parsed.data;
 
-  // Cross-device guard: only one active session at a time. The client can pass
-  // force=true to end the existing one and take over (e.g. user confirms the
-  // "active session on another device" prompt).
+  if (mode === "deep_dive" && !material_id) {
+    return NextResponse.json(
+      { error: "material_id required for deep_dive mode" },
+      { status: 400 }
+    );
+  }
+
+  // Deep Dive pauses are durable: resume the same material even if the session
+  // is older than the generic cross-device stale cutoff.
+  if (mode === "deep_dive" && material_id && !force) {
+    const paused = await findPausedDeepDiveSession(supabase, user.id, material_id);
+    if (paused) {
+      const competing = await findActiveSession(supabase, user.id);
+      if (competing && competing.id !== paused.id) {
+        return NextResponse.json(
+          {
+            error: "active_session_elsewhere",
+            active_session: competing,
+          },
+          { status: 409 }
+        );
+      }
+      const resumed = await resumeDeepDiveSession(supabase, user.id, paused);
+      if (resumed) return NextResponse.json(resumed);
+      await endSessionWithCompletedCount(supabase, paused.id);
+    }
+  }
+
+  // Cross-device guard: only one active session at a time. Other active session
+  // types, or Deep Dive for another material, still require takeover.
   const existing = await findActiveSession(supabase, user.id);
   if (existing && !force) {
     return NextResponse.json(
@@ -64,13 +91,6 @@ export async function POST(request: NextRequest) {
   }
   if (existing && force) {
     await endActiveSessions(supabase, user.id);
-  }
-
-  if (mode === "deep_dive" && !material_id) {
-    return NextResponse.json(
-      { error: "material_id required for deep_dive mode" },
-      { status: 400 }
-    );
   }
   if (mode === "audit" && !audit_id) {
     return NextResponse.json(
@@ -165,13 +185,17 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "no_items_available" }, { status: 404 });
   }
 
+  const materialTitle = await getMaterialTitle(supabase, user.id, material_id!);
+
   const { data: session, error: sessionErr } = await supabase
     .from("sessions")
     .insert({
       user_id: user.id,
       mode,
       items_planned: items.length,
-      device: "desktop",
+      material_id: material_id!,
+      planned_item_ids: items.map((item) => item.id),
+      device,
     })
     .select("id, started_at")
     .single();
@@ -187,6 +211,10 @@ export async function POST(request: NextRequest) {
     session_id: session.id,
     started_at: session.started_at,
     items,
+    material_title: materialTitle,
+    resumed: false,
+    completed_item_ids: [],
+    next_index: 0,
   });
 }
 
@@ -197,6 +225,101 @@ function shuffleArray<T>(arr: T[]): T[] {
     [out[i], out[j]] = [out[j], out[i]];
   }
   return out;
+}
+
+async function findPausedDeepDiveSession(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+  materialId: string
+): Promise<ActiveSession | null> {
+  const { data } = await supabase
+    .from("sessions")
+    .select("id, mode, device, material_id, planned_item_ids, items_planned, items_completed, started_at")
+    .eq("user_id", userId)
+    .eq("mode", "deep_dive")
+    .eq("material_id", materialId)
+    .is("ended_at", null)
+    .order("started_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  return (data as ActiveSession | null) ?? null;
+}
+
+async function resumeDeepDiveSession(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+  session: ActiveSession
+) {
+  const plannedIds = session.planned_item_ids ?? [];
+  if (plannedIds.length === 0 || !session.material_id) return null;
+
+  const [items, completedItemIds, materialTitle] = await Promise.all([
+    selectDeepDiveItemsByIds(supabase, userId, plannedIds),
+    getCompletedItemIds(supabase, session.id),
+    getMaterialTitle(supabase, userId, session.material_id),
+  ]);
+
+  if (items.length === 0) return null;
+
+  const completedSet = new Set(completedItemIds);
+  const nextIndex = items.findIndex((item) => !completedSet.has(item.id));
+  if (nextIndex < 0) return null;
+
+  return {
+    session_id: session.id,
+    started_at: session.started_at,
+    items,
+    material_title: materialTitle,
+    resumed: true,
+    completed_item_ids: completedItemIds,
+    next_index: nextIndex,
+  };
+}
+
+async function getCompletedItemIds(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  sessionId: string
+): Promise<string[]> {
+  const { data } = await supabase
+    .from("reviews")
+    .select("item_id")
+    .eq("session_id", sessionId);
+
+  return [...new Set((data ?? []).map((row) => (row as { item_id: string }).item_id))];
+}
+
+async function endSessionWithCompletedCount(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  sessionId: string
+): Promise<void> {
+  const { count: completed } = await supabase
+    .from("reviews")
+    .select("id", { count: "exact", head: true })
+    .eq("session_id", sessionId);
+
+  await supabase
+    .from("sessions")
+    .update({
+      ended_at: new Date().toISOString(),
+      items_completed: completed ?? 0,
+    })
+    .eq("id", sessionId);
+}
+
+async function getMaterialTitle(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+  materialId: string
+): Promise<string | null> {
+  const { data } = await supabase
+    .from("materials")
+    .select("title")
+    .eq("user_id", userId)
+    .eq("id", materialId)
+    .maybeSingle();
+
+  return (data as { title: string } | null)?.title ?? null;
 }
 
 /**
@@ -346,6 +469,26 @@ async function selectDeepDiveItems(
     .limit(limit);
 
   return withPreviews(data ?? []);
+}
+
+async function selectDeepDiveItemsByIds(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+  itemIds: string[]
+): Promise<ReviewItem[]> {
+  if (itemIds.length === 0) return [];
+
+  const { data } = await supabase
+    .from("items")
+    .select(ITEM_SELECT)
+    .eq("user_id", userId)
+    .eq("type", "open")
+    .eq("is_suspended", false)
+    .is("audit_id", null)
+    .in("id", itemIds);
+
+  const byId = new Map(withPreviews(data ?? []).map((item) => [item.id, item]));
+  return itemIds.map((id) => byId.get(id)).filter((item): item is ReviewItem => Boolean(item));
 }
 
 const ITEM_SELECT =

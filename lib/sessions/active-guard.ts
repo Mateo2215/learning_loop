@@ -11,6 +11,10 @@ export interface ActiveSession {
   id: string;
   mode: "review" | "deep_dive" | "audit";
   device: "desktop" | "mobile" | string | null;
+  material_id: string | null;
+  planned_item_ids: string[] | null;
+  items_planned: number | null;
+  items_completed: number;
   started_at: string;
 }
 
@@ -22,7 +26,7 @@ export async function findActiveSession(
 
   const { data } = await supabase
     .from("sessions")
-    .select("id, mode, device, started_at")
+    .select("id, mode, device, material_id, planned_item_ids, items_planned, items_completed, started_at")
     .eq("user_id", userId)
     .is("ended_at", null)
     .gte("started_at", cutoffIso)

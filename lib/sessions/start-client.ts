@@ -8,6 +8,9 @@ export interface ActiveSessionInfo {
   id: string;
   mode: "review" | "deep_dive" | "audit";
   device: string | null;
+  material_id?: string | null;
+  items_planned?: number | null;
+  items_completed?: number;
   started_at: string;
 }
 

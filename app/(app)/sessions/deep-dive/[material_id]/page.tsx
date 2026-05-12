@@ -29,6 +29,9 @@ interface SessionStartResponse {
   started_at: string;
   items: OpenItem[];
   material_title?: string | null;
+  resumed?: boolean;
+  completed_item_ids?: string[];
+  next_index?: number;
 }
 
 interface AnswerResponse {
@@ -84,13 +87,19 @@ export default function DeepDivePage({ params }: { params: Promise<{ material_id
     setSessionId(data.session_id);
     setItems(data.items);
     if (data.material_title) setMaterialTitle(data.material_title);
-    setIndex(0);
+    setIndex(data.next_index ?? 0);
+    setUserAnswer("");
+    setFeedback(null);
+    setCalibrationPicked(null);
     setQuestionShownAt(Date.now());
     setPhase(data.items.length === 0 ? "empty" : "answering");
   }, [material_id]);
 
   useEffect(() => {
-    void startDeepDive(false);
+    const timer = window.setTimeout(() => {
+      void startDeepDive(false);
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [startDeepDive]);
 
   const submitAnswer = useCallback(async () => {
@@ -178,14 +187,13 @@ export default function DeepDivePage({ params }: { params: Promise<{ material_id
 
   const handleClose = useCallback(() => {
     if ((phase === "answering" || phase === "validating") && userAnswer.trim().length > 0) {
-      const confirmed = window.confirm("Wyjść z sesji? Niewysłana odpowiedź zostanie utracona.");
+      const confirmed = window.confirm(
+        "Wyjść z sesji? Niewysłana odpowiedź zostanie utracona, ale Deep Dive będzie można wznowić."
+      );
       if (!confirmed) return;
     }
-    if (sessionId) {
-      void fetch(`/api/sessions/${sessionId}/end`, { method: "POST" }).catch(() => {});
-    }
     router.push("/sessions/deep-dive");
-  }, [phase, userAnswer, sessionId, router]);
+  }, [phase, userAnswer, router]);
 
   // Keyboard shortcuts: Cmd/Ctrl+Enter submit, Esc close.
   useEffect(() => {

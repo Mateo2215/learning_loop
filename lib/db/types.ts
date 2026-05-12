@@ -85,6 +85,21 @@ export interface Item {
   updated_at: string;
 }
 
+export interface Session {
+  id: string;
+  user_id: string;
+  mode: SessionMode;
+  material_id: string | null;
+  planned_item_ids: string[];
+  started_at: string;
+  ended_at: string | null;
+  items_planned: number | null;
+  items_completed: number;
+  device: "desktop" | "mobile" | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface ProcessingJob {
   id: string;
   user_id: string;

@@ -2,10 +2,10 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
 const RATING_MAP: Record<number, { rating: string; label: string }> = {
-  1: { rating: "again", label: "Znów" },
-  2: { rating: "hard", label: "Trudne" },
-  3: { rating: "good", label: "Dobrze" },
-  4: { rating: "easy", label: "Łatwe" },
+  1: { rating: "again", label: "Nie pamiętam" },
+  2: { rating: "hard", label: "Z trudem" },
+  3: { rating: "good", label: "Pamiętam" },
+  4: { rating: "easy", label: "Znam dobrze" },
 };
 
 const EVAL_MAP: Record<string, { rating: string; label: string }> = {
