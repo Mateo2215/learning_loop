@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { prepareAudit } from "@/lib/audits/scheduler";
 import { isLeechRotationDue, pickLeechCandidates } from "@/lib/db/leeches";
 import { endActiveSessions, findActiveSession, type ActiveSession } from "@/lib/sessions/active-guard";
+import { capDeepDiveRoundSize, DEEP_DIVE_ROUND_SIZE } from "@/lib/sessions/deep-dive";
 import { previewIntervals, type IntervalPreview } from "@/lib/fsrs/scheduler";
 import type { Item } from "@/lib/db/types";
 
@@ -179,7 +180,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ session_id: session.id, started_at: session.started_at, items: result.items });
   }
 
-  const items = await selectDeepDiveItems(supabase, user.id, material_id!, item_count);
+  const items = await selectDeepDiveItems(
+    supabase,
+    user.id,
+    material_id!,
+    capDeepDiveRoundSize(item_count)
+  );
 
   if (items.length === 0) {
     return NextResponse.json({ error: "no_items_available" }, { status: 404 });
@@ -263,16 +269,41 @@ async function resumeDeepDiveSession(
   if (items.length === 0) return null;
 
   const completedSet = new Set(completedItemIds);
-  const nextIndex = items.findIndex((item) => !completedSet.has(item.id));
+  const completedPlannedIds = plannedIds.filter((id) => completedSet.has(id));
+  if (completedPlannedIds.length >= DEEP_DIVE_ROUND_SIZE) return null;
+
+  const remainingSlots = DEEP_DIVE_ROUND_SIZE - completedPlannedIds.length;
+  const nextUnansweredIds = plannedIds
+    .filter((id) => !completedSet.has(id))
+    .slice(0, remainingSlots);
+  const effectivePlannedIds = [...completedPlannedIds, ...nextUnansweredIds];
+  if (effectivePlannedIds.length === 0) return null;
+
+  const effectiveItems = itemsByPlannedOrder(items, effectivePlannedIds);
+  const effectiveCompletedSet = new Set(completedPlannedIds);
+  const nextIndex = effectiveItems.findIndex((item) => !effectiveCompletedSet.has(item.id));
   if (nextIndex < 0) return null;
+
+  if (
+    effectivePlannedIds.length !== plannedIds.length ||
+    effectivePlannedIds.some((id, index) => id !== plannedIds[index])
+  ) {
+    await supabase
+      .from("sessions")
+      .update({
+        planned_item_ids: effectivePlannedIds,
+        items_planned: effectivePlannedIds.length,
+      })
+      .eq("id", session.id);
+  }
 
   return {
     session_id: session.id,
     started_at: session.started_at,
-    items,
+    items: effectiveItems,
     material_title: materialTitle,
     resumed: true,
-    completed_item_ids: completedItemIds,
+    completed_item_ids: completedPlannedIds,
     next_index: nextIndex,
   };
 }
@@ -465,10 +496,26 @@ async function selectDeepDiveItems(
     .eq("type", "open")
     .eq("is_suspended", false)
     .is("audit_id", null)
-    .order("created_at", { ascending: true })
-    .limit(limit);
+    .order("created_at", { ascending: true });
 
-  return withPreviews(data ?? []);
+  const items = withPreviews(data ?? []);
+  if (items.length === 0) return [];
+
+  const latestReviewByItem = await getLatestReviewByItem(supabase, userId, items.map((item) => item.id));
+  const originalOrder = new Map(items.map((item, index) => [item.id, index]));
+
+  return [...items]
+    .sort((a, b) => {
+      const aReviewedAt = latestReviewByItem.get(a.id);
+      const bReviewedAt = latestReviewByItem.get(b.id);
+      if (!aReviewedAt && bReviewedAt) return -1;
+      if (aReviewedAt && !bReviewedAt) return 1;
+      if (!aReviewedAt && !bReviewedAt) {
+        return (originalOrder.get(a.id) ?? 0) - (originalOrder.get(b.id) ?? 0);
+      }
+      return new Date(aReviewedAt!).getTime() - new Date(bReviewedAt!).getTime();
+    })
+    .slice(0, limit);
 }
 
 async function selectDeepDiveItemsByIds(
@@ -489,6 +536,33 @@ async function selectDeepDiveItemsByIds(
 
   const byId = new Map(withPreviews(data ?? []).map((item) => [item.id, item]));
   return itemIds.map((id) => byId.get(id)).filter((item): item is ReviewItem => Boolean(item));
+}
+
+async function getLatestReviewByItem(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+  itemIds: string[]
+): Promise<Map<string, string>> {
+  if (itemIds.length === 0) return new Map();
+
+  const { data } = await supabase
+    .from("reviews")
+    .select("item_id, created_at")
+    .eq("user_id", userId)
+    .in("item_id", itemIds)
+    .order("created_at", { ascending: false });
+
+  const latest = new Map<string, string>();
+  for (const row of data ?? []) {
+    const review = row as { item_id: string; created_at: string };
+    if (!latest.has(review.item_id)) latest.set(review.item_id, review.created_at);
+  }
+  return latest;
+}
+
+function itemsByPlannedOrder(items: ReviewItem[], plannedIds: string[]): ReviewItem[] {
+  const byId = new Map(items.map((item) => [item.id, item]));
+  return plannedIds.map((id) => byId.get(id)).filter((item): item is ReviewItem => Boolean(item));
 }
 
 const ITEM_SELECT =

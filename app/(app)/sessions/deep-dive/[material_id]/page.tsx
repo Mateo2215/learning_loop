@@ -13,6 +13,7 @@ import { SessionHeader } from "@/components/sessions/session-header";
 import { startSession, type ActiveSessionInfo } from "@/lib/sessions/start-client";
 import { ActiveSessionPrompt } from "@/components/sessions/active-session-prompt";
 import { ScreenMessage } from "@/components/sessions/screen-message";
+import { DEEP_DIVE_ROUND_SIZE } from "@/lib/sessions/deep-dive";
 import { cn } from "@/lib/utils";
 
 interface OpenItem {
@@ -65,7 +66,7 @@ export default function DeepDivePage({ params }: { params: Promise<{ material_id
     const result = await startSession<SessionStartResponse>({
       mode: "deep_dive",
       material_id,
-      item_count: 10,
+      item_count: DEEP_DIVE_ROUND_SIZE,
       force,
     });
     if (result.kind === "conflict") {
@@ -188,7 +189,7 @@ export default function DeepDivePage({ params }: { params: Promise<{ material_id
   const handleClose = useCallback(() => {
     if ((phase === "answering" || phase === "validating") && userAnswer.trim().length > 0) {
       const confirmed = window.confirm(
-        "Wyjść z sesji? Niewysłana odpowiedź zostanie utracona, ale Deep Dive będzie można wznowić."
+        "Wyjść z rundy? Niewysłana odpowiedź zostanie utracona, ale Deep Dive będzie można wznowić."
       );
       if (!confirmed) return;
     }
@@ -217,7 +218,7 @@ export default function DeepDivePage({ params }: { params: Promise<{ material_id
     return () => window.removeEventListener("keydown", onKey);
   }, [phase, submitAnswer, goNext, handleClose]);
 
-  if (phase === "loading") return <ScreenMessage title="Wczytuję sesję…" />;
+  if (phase === "loading") return <ScreenMessage title="Wczytuję rundę..." />;
 
   if (phase === "conflict" && activeConflict) {
     return (
@@ -240,7 +241,7 @@ export default function DeepDivePage({ params }: { params: Promise<{ material_id
     return (
       <ScreenMessage
         title="Brak pytań otwartych"
-        description="Ten materiał nie ma jeszcze pytań otwartych do Deep Dive."
+        description="Ten materiał nie ma jeszcze pytań otwartych do rundy Deep Dive."
         action={
           <Button onClick={() => router.push("/sessions/deep-dive")}>← Wybierz inny materiał</Button>
         }
@@ -261,7 +262,7 @@ export default function DeepDivePage({ params }: { params: Promise<{ material_id
   if (phase === "done") {
     return (
       <ScreenMessage
-        title={`Sesja zakończona — ${index + 1} pytań`}
+        title={`Runda zakończona - ${index + 1} pytań`}
         description="Świetna robota."
         action={
           <div className="flex gap-2">
@@ -299,7 +300,7 @@ export default function DeepDivePage({ params }: { params: Promise<{ material_id
         <div className="w-full flex flex-col gap-6">
           <div className="text-center">
             <div className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted mb-3">
-              Pytanie {index + 1} z {items.length}
+              Runda Deep Dive · pytanie {index + 1} z {items.length}
             </div>
             <h2 className="font-serif text-[28px] sm:text-[36px] leading-tight tracking-[-0.015em] text-fg max-w-[640px] mx-auto">
               {current.question}

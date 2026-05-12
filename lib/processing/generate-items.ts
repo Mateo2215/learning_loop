@@ -8,6 +8,7 @@ import { complete } from "@/lib/ai/anthropic";
 import { parseAIJson } from "@/lib/ai/json";
 import { GENERATE_CLOZE_SYSTEM_PROMPT } from "@/lib/ai/prompts/generate-cloze";
 import { GENERATE_OPEN_SYSTEM_PROMPT } from "@/lib/ai/prompts/generate-open";
+import { DEEP_DIVE_ROUND_SIZE } from "@/lib/sessions/deep-dive";
 import type { TokenUsage } from "@/lib/ai/pricing";
 
 const ClozeCardSchema = z.object({
@@ -70,5 +71,5 @@ export async function generateOpenQuestions(compressedContent: string): Promise<
 
   const parsed = parseAIJson(out.text);
   const validated = OpenBatchSchema.parse(parsed);
-  return { questions: validated.questions, usage: out.usage };
+  return { questions: validated.questions.slice(0, DEEP_DIVE_ROUND_SIZE), usage: out.usage };
 }

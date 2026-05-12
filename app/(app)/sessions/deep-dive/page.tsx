@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Chip } from "@/components/ui/chip";
 import { SectionHeader } from "@/components/shared/section-header";
 import { CATEGORY_LABELS, type Category, type MaterialStatus } from "@/lib/db/types";
+import { DEEP_DIVE_ROUND_SIZE } from "@/lib/sessions/deep-dive";
 
 interface MaterialOption {
   id: string;
@@ -83,8 +84,11 @@ export default async function DeepDiveSelectorPage() {
         .from("reviews")
         .select("id", { count: "exact", head: true })
         .eq("session_id", active.id);
-      const planned = active.planned_item_ids?.length || active.items_planned || material.open_count;
-      const completed = count ?? 0;
+      const planned = Math.min(
+        active.planned_item_ids?.length || active.items_planned || material.open_count,
+        DEEP_DIVE_ROUND_SIZE
+      );
+      const completed = Math.min(count ?? 0, planned);
       if (completed < planned) {
         activeDeepDive = {
           material_id: active.material_id,
@@ -100,7 +104,7 @@ export default async function DeepDiveSelectorPage() {
     <div className="max-w-[1024px] mx-auto px-6 py-10">
       <SectionHeader
         title="Deep Dive"
-        sub="Wybierz materiał i odpowiedz na pytanie otwarte. AI oceni Twoje odpowiedzi."
+        sub={`Wybierz materiał i zrób krótką rundę ${DEEP_DIVE_ROUND_SIZE} pytań otwartych. AI oceni Twoje odpowiedzi.`}
       />
 
       {activeDeepDive && (
@@ -113,7 +117,7 @@ export default async function DeepDiveSelectorPage() {
               {activeDeepDive.material_title}
             </h2>
             <p className="text-sm text-muted mt-1">
-              {activeDeepDive.completed} z {activeDeepDive.planned} pytań ukończonych
+              {activeDeepDive.completed} z {activeDeepDive.planned} pytań w tej rundzie
             </p>
           </div>
           <Button asChild className="min-h-10">
@@ -128,7 +132,7 @@ export default async function DeepDiveSelectorPage() {
           <div>
             <h2 className="font-serif text-[20px] font-medium mb-1">Brak materiałów do Deep Dive</h2>
             <p className="text-[14px] text-muted max-w-md">
-              Zaimportuj jakiś materiał — wygenerujemy pytania otwarte automatycznie.
+              Zaimportuj jakiś materiał - wygenerujemy krótką rundę pytań otwartych automatycznie.
             </p>
           </div>
           <Button asChild>
@@ -158,7 +162,8 @@ export default async function DeepDiveSelectorPage() {
                   </div>
                   <h3 className="font-serif text-[15px] leading-snug line-clamp-2">{m.title}</h3>
                   <p className="font-mono text-[11px] text-muted mt-2">
-                    {m.open_count} {m.open_count === 1 ? "pytanie otwarte" : "pytań otwartych"}
+                    {m.open_count} {m.open_count === 1 ? "pytanie w puli" : "pytań w puli"} · runda{" "}
+                    {Math.min(m.open_count, DEEP_DIVE_ROUND_SIZE)}
                   </p>
                 </Link>
               </li>
@@ -171,7 +176,7 @@ export default async function DeepDiveSelectorPage() {
             </div>
             <BookOpen size={48} className="text-muted" />
             <p className="text-[14px] text-muted max-w-sm">
-              Po wyborze materiału z listy obok zaczniesz Deep Dive — AI oceni Twoje
+              Po wyborze materiału z listy obok zaczniesz krótką rundę Deep Dive - AI oceni Twoje
               odpowiedzi i pomoże zidentyfikować luki.
             </p>
           </div>
