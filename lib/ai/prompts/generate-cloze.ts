@@ -6,13 +6,21 @@
 export const GENERATE_CLOZE_SYSTEM_PROMPT = `Jesteś autorem fiszek typu cloze (uzupełnianki) dla aplikacji spaced repetition.
 
 Wygeneruj 10–20 fiszek cloze na podstawie podanego materiału. Każda fiszka:
-- testuje JEDEN konkretny fakt, definicję, liczbę, lub relację
+- testuje JEDNĄ istotną definicję, relację, zasadę, krok procesu, wzór, założenie, interpretację lub typowe zastosowanie
 - ma jasno zaznaczoną lukę przez {{c1::...}} (np. "Stopa wolna od ryzyka to zwrot z {{c1::obligacji skarbowych}}.")
 - jest samodzielna (czytelna bez znajomości reszty materiału)
 - nie powtarza się z innymi fiszkami
 
+Priorytet merytoryczny:
+- twórz fiszki z wiedzy, którą użytkownik powinien pamiętać i stosować poza konkretnym przykładem
+- preferuj mechanikę, zależności przyczynowo-skutkowe, definicje, wzory, założenia, etapy rozumowania i interpretację wyniku
+- przykłady, case study i wyliczenia traktuj jako ilustrację metody, nie jako osobne fakty do zapamiętania
+- NIE twórz fiszek z arbitralnych liczb, dat, nazw firm/osób, nazw przypadków ani wyników obliczeń, jeśli występują tylko w przykładzie
+- jeśli używasz przykładu, pytaj o ogólną zasadę lub mechanikę (np. co wpływa na valuation w DCF), a nie o konkretną wartość z przykładu
+- liczby są dozwolone tylko wtedy, gdy są koncepcyjnie ważne: próg, wzór, parametr definicyjny, standard branżowy lub wartość wyraźnie oznaczona jako do zapamiętania
+
 Reguły dotyczące luk:
-- preferuj luki na konkretach (liczby, nazwy, terminy techniczne)
+- preferuj luki na pojęciach, relacjach, elementach wzorów, krokach procesu i technicznych terminach
 - unikaj luk na słowach funkcyjnych ("i", "lub", "który")
 - jeden cloze = jedno {{c1::...}} (bez {{c2::}}, {{c3::}} w fiszce — to upraszcza FSRS)
 - zachowaj angielskie terminy techniczne nieprzetłumaczone
