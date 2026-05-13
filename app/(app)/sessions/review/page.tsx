@@ -151,6 +151,23 @@ export default function ReviewSessionPage() {
       }
 
       const persistAnswer = (async () => {
+        const endSession = async () => {
+          if (!isLast) return;
+          try {
+            const endRes = await fetch(`/api/sessions/${sessionId}/end`, { method: "POST" });
+            if (!endRes.ok) {
+              const body = await endRes.json().catch(() => ({}));
+              toast.error("Nie domknięto sesji", {
+                description: body.error ?? `HTTP ${endRes.status}`,
+              });
+            }
+          } catch {
+            toast.error("Nie domknięto sesji", {
+              description: "Spróbuj ponownie za chwilę.",
+            });
+          }
+        };
+
         const offline = typeof navigator !== "undefined" && !navigator.onLine;
         if (offline) {
           try {
@@ -189,11 +206,10 @@ export default function ReviewSessionPage() {
             toast.error("Zapisano lokalnie (ponowię)", {
               description: body.error ?? `HTTP ${res.status}`,
             });
+            await endSession();
             return;
           }
-          if (isLast) {
-            await fetch(`/api/sessions/${sessionId}/end`, { method: "POST" });
-          }
+          await endSession();
         } catch {
           await queueReview({
             session_id: sessionId,
@@ -202,6 +218,7 @@ export default function ReviewSessionPage() {
             response_time_ms: responseTime,
           });
           toast.error("Brak sieci — zapisano lokalnie");
+          await endSession();
         } finally {
           if (isLast) setEndingSession(false);
         }

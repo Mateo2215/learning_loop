@@ -102,15 +102,17 @@ export async function POST(request: NextRequest) {
 
   // Schedule the long AI pipeline after the response while keeping it tracked
   // by the Next.js runtime for the route's configured maxDuration.
-  after(() => {
-    void processMaterial({
-      supabase,
-      userId: user.id,
-      jobId: job.id,
-      payload,
-    }).catch((err) => {
+  after(async () => {
+    try {
+      await processMaterial({
+        supabase,
+        userId: user.id,
+        jobId: job.id,
+        payload,
+      });
+    } catch (err) {
       console.error("[import] pipeline crashed:", err);
-    });
+    }
   });
 
   return NextResponse.json({ job_id: job.id });

@@ -157,10 +157,24 @@ export default function AuditRunPage({ params }: { params: Promise<{ audit_id: s
       if (sessionId) {
         try {
           const res = await fetch(`/api/sessions/${sessionId}/end`, { method: "POST" });
-          const data = (await res.json()) as EndResponse;
-          setAuditScore(data.audit_score);
+          if (!res.ok) {
+            const body = await res.json().catch(() => ({}));
+            toast.error("Nie zamknięto audytu", {
+              description: body.error ?? `HTTP ${res.status}`,
+            });
+            return;
+          }
+          const data = (await res.json()) as Partial<EndResponse>;
+          setAuditScore(
+            typeof data.audit_score === "number" && Number.isFinite(data.audit_score)
+              ? data.audit_score
+              : null
+          );
         } catch {
-          /* noop — closure isn't critical for UX */
+          toast.error("Nie zamknięto audytu", {
+            description: "Spróbuj ponownie za chwilę.",
+          });
+          return;
         }
       }
       setPhase("done");
