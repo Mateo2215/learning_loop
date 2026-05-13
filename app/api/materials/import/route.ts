@@ -1,10 +1,13 @@
-import { NextResponse, type NextRequest } from "next/server";
+import { after, NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { parseFile, parsePastedText } from "@/lib/processing/parse";
 import { processMaterial } from "@/lib/processing/pipeline";
+import { markStaleImportJobs } from "@/lib/processing/stale-jobs";
 import { CATEGORIES } from "@/lib/db/types";
 import type { ImportJobPayload } from "@/lib/db/types";
+
+export const maxDuration = 360;
 
 const FormSchema = z.object({
   title: z.string().min(3).max(200),
@@ -20,8 +23,7 @@ const FormSchema = z.object({
  *   - file (File, optional) — DOCX/MD/TXT
  *   - pasted_text (string, optional) — used when no file
  *
- * Creates a `processing_jobs` row, kicks off the pipeline async (fire-and-forget
- * within the route — Next.js dev server keeps the function alive long enough),
+ * Creates a `processing_jobs` row, schedules the long pipeline with `after()`,
  * and returns `{ job_id }` immediately. Client polls or subscribes to the job
  * row for progress.
  */
@@ -29,6 +31,8 @@ export async function POST(request: NextRequest) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "not authenticated" }, { status: 401 });
+
+  await markStaleImportJobs(supabase, user.id);
 
   let formData: FormData;
   try {
@@ -96,16 +100,17 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Fire-and-forget. We don't `await` because we want to return the job ID
-  // to the client immediately. Errors inside processMaterial mark the job as
-  // failed and are caught there — they never bubble up here.
-  void processMaterial({
-    supabase,
-    userId: user.id,
-    jobId: job.id,
-    payload,
-  }).catch((err) => {
-    console.error("[import] pipeline crashed:", err);
+  // Schedule the long AI pipeline after the response while keeping it tracked
+  // by the Next.js runtime for the route's configured maxDuration.
+  after(() => {
+    void processMaterial({
+      supabase,
+      userId: user.id,
+      jobId: job.id,
+      payload,
+    }).catch((err) => {
+      console.error("[import] pipeline crashed:", err);
+    });
   });
 
   return NextResponse.json({ job_id: job.id });

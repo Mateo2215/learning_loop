@@ -19,9 +19,13 @@ interface JobState {
   id: string;
   status: "pending" | "running" | "completed" | "failed";
   progress: number;
+  created_at?: string;
+  updated_at?: string;
   error?: string | null;
   result?: { material_id?: string; cloze_count?: number; open_count?: number } | null;
 }
+
+const INTERRUPTED_IMPORT_ERROR = "Import timed out or was interrupted before completion.";
 
 export default function ImportPage() {
   const router = useRouter();
@@ -33,6 +37,8 @@ export default function ImportPage() {
   const [phase, setPhase] = useState<Phase>("form");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [jobState, setJobState] = useState<JobState | null>(null);
+  const [localStartedAtMs, setLocalStartedAtMs] = useState(0);
+  const [nowMs, setNowMs] = useState(0);
   const pollRef = useRef<number | null>(null);
   const channelRef = useRef<RealtimeChannel | null>(null);
 
@@ -46,6 +52,15 @@ export default function ImportPage() {
       }
     };
   }, []);
+
+  useEffect(() => {
+    if (phase !== "processing") return;
+
+    const tick = () => setNowMs(Date.now());
+    tick();
+    const timer = window.setInterval(tick, 1000);
+    return () => window.clearInterval(timer);
+  }, [phase]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -71,6 +86,7 @@ export default function ImportPage() {
     if (mode === "paste") fd.set("pasted_text", pastedText);
 
     setPhase("processing");
+    setLocalStartedAtMs(Date.now());
 
     let res: Response;
     try {
@@ -111,7 +127,7 @@ export default function ImportPage() {
       }
     } else if (data.status === "failed") {
       stopTracking();
-      const msg = data.error ?? "Pipeline nie zakończył się sukcesem.";
+      const msg = displayJobError(data.error);
       setPhase("error");
       setErrorMessage(msg);
       toast.error("Import nie powiódł się", { description: msg });
@@ -253,7 +269,7 @@ export default function ImportPage() {
             <CardHeader>
               <CardTitle>Przetwarzanie…</CardTitle>
               <CardDescription>
-                Materiał jest analizowany przez AI. Może to potrwać 20–60 sekund.
+                Materiał jest analizowany przez AI. Zwykle zajmuje to 2-3 minuty. Dłuższe materiały mogą potrwać do 5-6 minut.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -266,6 +282,9 @@ export default function ImportPage() {
                 </div>
                 <p className="text-sm text-muted">
                   {progressLabel(jobState?.progress ?? 0)} ({jobState?.progress ?? 0}%)
+                </p>
+                <p className="text-xs text-subtle">
+                  Czas: {formatElapsedTime(jobState?.created_at, localStartedAtMs, nowMs)}
                 </p>
               </div>
             </CardContent>
@@ -312,4 +331,23 @@ function progressLabel(progress: number): string {
   if (progress < 90) return "Generowanie pytań otwartych";
   if (progress < 100) return "Planowanie audytów";
   return "Zakończono";
+}
+
+function displayJobError(error?: string | null): string {
+  if (error === INTERRUPTED_IMPORT_ERROR) {
+    return "Import został przerwany. Uruchom import ponownie.";
+  }
+  return error ?? "Pipeline nie zakończył się sukcesem.";
+}
+
+function formatElapsedTime(createdAt: string | undefined, localStartedAtMs: number, nowMs: number): string {
+  const startedAtMs = createdAt ? new Date(createdAt).getTime() : localStartedAtMs;
+  if (!Number.isFinite(startedAtMs) || startedAtMs <= 0 || nowMs <= 0) return "0 s";
+
+  const elapsedSeconds = Math.max(0, Math.floor((nowMs - startedAtMs) / 1000));
+  const minutes = Math.floor(elapsedSeconds / 60);
+  const seconds = elapsedSeconds % 60;
+
+  if (minutes === 0) return `${seconds} s`;
+  return `${minutes} min ${seconds.toString().padStart(2, "0")} s`;
 }
