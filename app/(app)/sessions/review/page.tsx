@@ -56,12 +56,28 @@ export default function ReviewSessionPage() {
   const [activeConflict, setActiveConflict] = useState<ActiveSessionInfo | null>(null);
   const [takingOver, setTakingOver] = useState(false);
   const [startedAt, setStartedAt] = useState<number | null>(null);
-  const [now, setNow] = useState<number>(Date.now());
+  const [now, setNow] = useState<number>(0);
   const [cardHistory, setCardHistory] = useState<SidePanelHistoryEntry[]>([]);
   const lastFetchedItemId = useRef<string | null>(null);
+  const submittedItemIds = useRef<Set<string>>(new Set());
+  const sessionEndPromise = useRef<Promise<void> | null>(null);
+  const [endingSession, setEndingSession] = useState(false);
+  const [startingNext, setStartingNext] = useState(false);
 
   const startReview = useCallback(async (force: boolean) => {
     setPhase("loading");
+    setErrorMessage(null);
+    setSessionId(null);
+    setItems([]);
+    setIndex(0);
+    setAnsweredCount(0);
+    setQuestionShownAt(0);
+    setStartedAt(null);
+    setNow(0);
+    setCardHistory([]);
+    lastFetchedItemId.current = null;
+    submittedItemIds.current.clear();
+    sessionEndPromise.current = null;
     const stored = sessionStorage.getItem("review_options");
     sessionStorage.removeItem("review_options");
     const extra = stored ? (JSON.parse(stored) as { shuffle?: boolean; material_id?: string }) : {};
@@ -93,11 +109,15 @@ export default function ReviewSessionPage() {
     setAnsweredCount(0);
     setQuestionShownAt(Date.now());
     setStartedAt(new Date(data.started_at).getTime());
+    setNow(Date.now());
     setPhase(data.items.length === 0 ? "empty" : "answering");
   }, []);
 
   useEffect(() => {
-    void startReview(false);
+    const timer = window.setTimeout(() => {
+      void startReview(false);
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [startReview]);
 
   // Tick once per second to drive the header timer.
@@ -112,6 +132,8 @@ export default function ReviewSessionPage() {
       if (!sessionId) return;
       const item = items[index];
       if (!item) return;
+      if (submittedItemIds.current.has(item.id)) return;
+      submittedItemIds.current.add(item.id);
 
       const responseTime = Date.now() - questionShownAt;
       const next = index + 1;
@@ -121,13 +143,14 @@ export default function ReviewSessionPage() {
       setAnsweredCount((n) => n + 1);
       if (isLast) {
         setPhase("done");
+        setEndingSession(true);
       } else {
         setIndex(next);
         setQuestionShownAt(Date.now());
         setPhase("answering");
       }
 
-      void (async () => {
+      const persistAnswer = (async () => {
         const offline = typeof navigator !== "undefined" && !navigator.onLine;
         if (offline) {
           try {
@@ -139,6 +162,8 @@ export default function ReviewSessionPage() {
             });
           } catch {
             toast.error("Nie udało się zapisać lokalnie");
+          } finally {
+            if (isLast) setEndingSession(false);
           }
           return;
         }
@@ -177,11 +202,30 @@ export default function ReviewSessionPage() {
             response_time_ms: responseTime,
           });
           toast.error("Brak sieci — zapisano lokalnie");
+        } finally {
+          if (isLast) setEndingSession(false);
         }
       })();
+
+      if (isLast) {
+        sessionEndPromise.current = persistAnswer;
+      } else {
+        void persistAnswer;
+      }
     },
     [sessionId, items, index, questionShownAt]
   );
+
+  const startNextReviewSession = useCallback(async () => {
+    if (startingNext) return;
+    setStartingNext(true);
+    try {
+      await sessionEndPromise.current;
+      await startReview(false);
+    } finally {
+      setStartingNext(false);
+    }
+  }, [startReview, startingNext]);
 
   // Fetch card history whenever the active item changes.
   useEffect(() => {
@@ -335,7 +379,9 @@ export default function ReviewSessionPage() {
         description="Świetna robota. FSRS zaplanowany na następne powtórki."
         action={
           <div className="flex gap-2">
-            <Button onClick={() => router.refresh()}>Kolejna sesja</Button>
+            <Button onClick={startNextReviewSession} disabled={endingSession || startingNext}>
+              {endingSession || startingNext ? "Startuję..." : "Kolejna sesja"}
+            </Button>
             <Button variant="outline" onClick={() => router.push("/dashboard")}>Dashboard</Button>
           </div>
         }

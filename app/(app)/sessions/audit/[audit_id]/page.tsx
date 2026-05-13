@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, use } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -103,7 +104,10 @@ export default function AuditRunPage({ params }: { params: Promise<{ audit_id: s
   }, [audit_id]);
 
   useEffect(() => {
-    void startAudit(false);
+    const timer = window.setTimeout(() => {
+      void startAudit(false);
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [startAudit]);
 
   const submitAnswer = useCallback(async () => {
@@ -214,8 +218,12 @@ export default function AuditRunPage({ params }: { params: Promise<{ audit_id: s
         description={audit ? `${TRIGGER_LABEL[audit.trigger]} · ${audit.material_title}` : undefined}
         action={
           <div className="flex gap-2">
-            <Button onClick={() => router.push("/sessions/audit")}>Inny audyt</Button>
-            <Button variant="outline" onClick={() => router.push("/dashboard")}>Dashboard</Button>
+            <Button asChild>
+              <Link href="/sessions/audit">Inny audyt</Link>
+            </Button>
+            <Button asChild variant="outline">
+              <Link href="/dashboard">Dashboard</Link>
+            </Button>
           </div>
         }
       />

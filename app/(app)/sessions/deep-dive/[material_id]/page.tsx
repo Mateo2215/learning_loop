@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, use } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { AlertTriangle, Check, Smile } from "lucide-react";
@@ -266,8 +267,12 @@ export default function DeepDivePage({ params }: { params: Promise<{ material_id
         description="Świetna robota."
         action={
           <div className="flex gap-2">
-            <Button onClick={() => router.push("/sessions/deep-dive")}>Inny materiał</Button>
-            <Button variant="outline" onClick={() => router.push("/dashboard")}>Dashboard</Button>
+            <Button asChild>
+              <Link href="/sessions/deep-dive">Inny materiał</Link>
+            </Button>
+            <Button asChild variant="outline">
+              <Link href="/dashboard">Dashboard</Link>
+            </Button>
           </div>
         }
       />
@@ -350,7 +355,7 @@ export default function DeepDivePage({ params }: { params: Promise<{ material_id
                 onPick={(c) => void submitCalibration(c)}
               />
               <Button onClick={() => void goNext()} className="w-full min-h-12 text-[14px]">
-                Następne pytanie →
+                {index + 1 >= items.length ? "Zakończ rundę" : "Następne pytanie →"}
               </Button>
             </div>
           )}
