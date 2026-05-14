@@ -4,6 +4,7 @@ import { Toaster } from "sonner";
 import { ThemeProvider, THEME_INIT_SCRIPT } from "@/lib/theme/provider";
 import { SwRegister } from "@/components/shared/sw-register";
 import { InstallPrompt } from "@/components/shared/install-prompt";
+import { PortraitOrientationGuard } from "@/components/shared/portrait-orientation-guard";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -72,6 +73,7 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col">
         <ThemeProvider>
           {children}
+          <PortraitOrientationGuard />
           <SwRegister />
           <InstallPrompt />
           <Toaster position="top-right" richColors closeButton />
