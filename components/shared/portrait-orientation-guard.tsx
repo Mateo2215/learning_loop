@@ -10,6 +10,8 @@ type LockableScreenOrientation = ScreenOrientation & {
   lock?: (orientation: "portrait" | "portrait-primary") => Promise<void>;
 };
 
+const LOCK_EVENTS = ["pointerdown", "touchend", "click", "keydown"] as const;
+
 function subscribe(onStoreChange: () => void) {
   if (typeof window === "undefined") return () => {};
 
@@ -41,7 +43,7 @@ export function PortraitOrientationGuard() {
     const lockPortrait = () => {
       if (typeof screen === "undefined") return;
       const orientation = screen.orientation as LockableScreenOrientation | undefined;
-      void orientation?.lock?.("portrait").catch(() => {
+      void orientation?.lock?.("portrait-primary").catch(() => {
         // Some browsers only allow orientation lock for installed/fullscreen PWAs.
       });
     };
@@ -54,10 +56,16 @@ export function PortraitOrientationGuard() {
 
     document.addEventListener("visibilitychange", onVisibilityChange);
     window.addEventListener("orientationchange", lockPortrait);
+    LOCK_EVENTS.forEach((eventName) => {
+      window.addEventListener(eventName, lockPortrait, { capture: true, passive: true });
+    });
 
     return () => {
       document.removeEventListener("visibilitychange", onVisibilityChange);
       window.removeEventListener("orientationchange", lockPortrait);
+      LOCK_EVENTS.forEach((eventName) => {
+        window.removeEventListener(eventName, lockPortrait, { capture: true });
+      });
     };
   }, []);
 
