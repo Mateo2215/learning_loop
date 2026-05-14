@@ -7,7 +7,7 @@ import { markStaleImportJobs } from "@/lib/processing/stale-jobs";
 import { CATEGORIES } from "@/lib/db/types";
 import type { ImportJobPayload } from "@/lib/db/types";
 
-export const maxDuration = 360;
+export const maxDuration = 300;
 
 const FormSchema = z.object({
   title: z.string().min(3).max(200),
