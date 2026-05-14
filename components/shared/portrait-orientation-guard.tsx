@@ -3,7 +3,8 @@
 import { useEffect, useSyncExternalStore } from "react";
 import { Smartphone } from "lucide-react";
 
-const MOBILE_LANDSCAPE_QUERY = "(max-width: 767px) and (orientation: landscape)";
+const MOBILE_LANDSCAPE_QUERY =
+  "(orientation: landscape) and (max-height: 767px) and (pointer: coarse)";
 
 type LockableScreenOrientation = ScreenOrientation & {
   lock?: (orientation: "portrait" | "portrait-primary") => Promise<void>;
@@ -64,7 +65,7 @@ export function PortraitOrientationGuard() {
 
   return (
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-canvas px-6 text-center md:hidden"
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-canvas px-6 text-center"
       role="status"
       aria-live="polite"
     >
