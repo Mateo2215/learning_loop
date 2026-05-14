@@ -10,13 +10,12 @@
  * are cleared, so bumping the version forces clients to refresh.
  */
 
-const CACHE_VERSION = "v1";
+const CACHE_VERSION = "v2";
 const STATIC_CACHE = `ll-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `ll-runtime-${CACHE_VERSION}`;
 const API_CACHE = `ll-api-${CACHE_VERSION}`;
 
 const PRECACHE_URLS = [
-  "/manifest.json",
   "/icon.svg",
   "/icon-192.png",
   "/icon-512.png",
@@ -50,6 +49,12 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
 
+  // Manifest must stay fresh because Android uses it to build/update WebAPK metadata.
+  if (url.pathname === "/manifest.json") {
+    event.respondWith(networkOnly(req));
+    return;
+  }
+
   // API: NetworkFirst with 5s timeout, fallback to last-known cache.
   if (url.pathname.startsWith("/api/")) {
     event.respondWith(networkFirst(req, API_CACHE, 5000));
@@ -60,7 +65,6 @@ self.addEventListener("fetch", (event) => {
   if (
     url.pathname.startsWith("/_next/static/") ||
     url.pathname.startsWith("/icons/") ||
-    url.pathname === "/manifest.json" ||
     url.pathname === "/icon.svg" ||
     url.pathname.startsWith("/icon-") ||
     url.pathname.startsWith("/favicon-") ||
@@ -80,6 +84,18 @@ self.addEventListener("fetch", (event) => {
   // Everything else (fonts, images): runtime cache, network-first.
   event.respondWith(networkFirst(req, RUNTIME_CACHE, 8000));
 });
+
+async function networkOnly(request) {
+  try {
+    return await fetch(request, { cache: "no-store" });
+  } catch (err) {
+    return new Response(JSON.stringify({ error: "offline" }), {
+      status: 503,
+      statusText: "offline",
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+}
 
 async function cacheFirst(request, cacheName) {
   const cached = await caches.match(request);
