@@ -4,7 +4,6 @@
   "description": "Aktywne utrwalanie wiedzy z podcastów i materiałów",
   "lang": "pl",
   "start_url": "/dashboard",
-  "id": "/dashboard",
   "scope": "/",
   "display": "fullscreen",
   "display_override": ["fullscreen", "standalone"],
