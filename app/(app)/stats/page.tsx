@@ -92,7 +92,7 @@ export default async function StatsPage() {
   const monthCost = sum(monthCostRows ?? [], (r) => Number(r.cost_usd ?? 0));
 
   return (
-    <div className="max-w-[1024px] mx-auto px-6 py-10">
+    <div className="max-w-[1024px] mx-auto px-4 py-8 sm:px-6 sm:py-10">
       <SectionHeader
         title="Statystyki"
         sub="Twoja pętla nauki w liczbach. Tygodniowa dynamika, skuteczność i koszty AI."
@@ -143,17 +143,17 @@ export default async function StatsPage() {
         <KPICard label="Audyty wykonane" number={auditsDoneCount ?? 0} />
       </div>
 
-      <div className="bg-surface border border-line rounded-2xl p-6 mt-8">
-        <div className="flex items-start justify-between gap-4 mb-4">
-          <div>
-            <h3 className="font-serif text-[22px] font-medium leading-none">
+      <div className="bg-surface border border-line rounded-2xl p-4 mt-8 min-w-0 overflow-hidden sm:p-6">
+        <div className="flex flex-col gap-3 mb-4 min-w-0 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+          <div className="min-w-0">
+            <h3 className="font-serif text-[20px] font-medium leading-tight sm:text-[22px]">
               Aktywność (8 tygodni)
             </h3>
             <p className="mt-2 text-[12px] text-muted">
               Liczba powtórek tygodniowo. Zielony segment = poprawne odpowiedzi.
             </p>
           </div>
-          <div className="flex gap-3 text-[11px] font-mono text-muted shrink-0">
+          <div className="flex flex-wrap gap-x-3 gap-y-1.5 text-[10px] font-mono text-muted sm:text-[11px]">
             <span className="inline-flex items-center gap-1.5">
               <span className="inline-block w-2.5 h-2.5 rounded-sm bg-ok" />
               poprawne

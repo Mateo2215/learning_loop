@@ -17,7 +17,7 @@ export function ActivityChart({ data, className }: ActivityChartProps) {
   const max = Math.max(1, ...data.map((d) => d.total));
 
   return (
-    <div className={cn("flex items-end gap-2 h-40", className)}>
+    <div className={cn("flex h-36 min-w-0 items-end gap-1 overflow-hidden sm:h-40 sm:gap-2", className)}>
       {data.map((d, i) => {
         const totalH = (d.total / max) * 100;
         const correctH = d.total > 0 ? (d.correct / d.total) * 100 : 0;
@@ -25,7 +25,7 @@ export function ActivityChart({ data, className }: ActivityChartProps) {
         return (
           <div
             key={`${d.week}-${i}`}
-            className="flex-1 flex flex-col items-center gap-1.5 h-full"
+            className="flex h-full min-w-0 flex-1 flex-col items-center gap-1"
             title={`${d.correct} poprawnych / ${d.total} łącznie`}
           >
             <div className="w-full flex-1 flex items-end min-h-px">
@@ -52,7 +52,7 @@ export function ActivityChart({ data, className }: ActivityChartProps) {
             </div>
             <span
               className={cn(
-                "font-mono text-[11px]",
+                "font-mono text-[10px] leading-none sm:text-[11px]",
                 isCurrent ? "text-accent" : "text-muted",
               )}
             >

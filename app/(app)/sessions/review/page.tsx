@@ -464,7 +464,10 @@ export default function ReviewSessionPage() {
               >
                 Pokaż odpowiedź
               </Button>
-              <div className="text-[12px] text-muted flex items-center gap-2">
+              <div className="text-[12px] text-muted text-center md:hidden">
+                Dotknij kartę albo przycisk, aby pokazać odpowiedź
+              </div>
+              <div className="hidden text-[12px] text-muted md:flex items-center gap-2">
                 <Kbd>Spacja</Kbd>
                 <span>aby pokazać</span>
               </div>
