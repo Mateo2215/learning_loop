@@ -54,12 +54,12 @@ export function SessionHeader({
           <X size={18} />
         </button>
         {title && (
-          <>
+          <div className="hidden sm:flex items-center gap-3 min-w-0">
             <span className="h-5 w-px bg-line" aria-hidden />
             <span className="font-mono text-[12px] uppercase tracking-[0.15em] text-muted truncate max-w-[40vw]">
               {title}
             </span>
-          </>
+          </div>
         )}
       </div>
 

@@ -324,7 +324,7 @@ export default function DeepDivePage({ params }: { params: Promise<{ material_id
                 onSubmitShortcut={() => void submitAnswer()}
               />
 
-              <div className="flex items-center justify-between text-[12px] text-muted">
+              <div className="hidden md:flex items-center justify-between text-[12px] text-muted">
                 <span className="inline-flex items-center gap-1.5">
                   <Kbd>⌘</Kbd>
                   <span>+</span>
