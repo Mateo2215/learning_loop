@@ -26,6 +26,7 @@ export interface CalibrationStats {
   agree_count: number;
   total_validations: number;
   current_offset: number;
+  score_offset: number;
 }
 
 /**
@@ -73,6 +74,10 @@ export async function aggregateCalibrationForUser(
     const denom = Math.max(total, MIN_SAMPLE_FOR_CONFIDENCE);
     const raw = (b.lenient - b.strict) / denom;
     const offset = Number(Math.max(-1, Math.min(1, raw)).toFixed(2));
+    // Score offset uses the same ratio but scaled to [-2, +2] — 1-10 scale
+    // is granular enough that small evaluation drift maps to ~1 score point,
+    // and at full saturation we want up to ±2 points of correction.
+    const scoreOffset = Number(Math.max(-2, Math.min(2, raw * 2)).toFixed(2));
 
     const { error: upsertErr } = await supabase
       .from("calibration_offsets")
@@ -84,6 +89,7 @@ export async function aggregateCalibrationForUser(
           too_lenient_count: b.lenient,
           total_validations: total,
           current_offset: offset,
+          score_offset: scoreOffset,
         },
         { onConflict: "user_id,category" }
       );
@@ -96,6 +102,7 @@ export async function aggregateCalibrationForUser(
       agree_count: b.agree,
       total_validations: total,
       current_offset: offset,
+      score_offset: scoreOffset,
     });
   }
 
@@ -123,4 +130,33 @@ export async function getCalibrationOffset(
   const row = data as { current_offset: number | string; total_validations: number };
   if (row.total_validations < 3) return 0; // ignore until we have at least 3 calibrations
   return Number(row.current_offset);
+}
+
+/**
+ * Read both calibration offsets in one round-trip (evaluation + score).
+ * Returns zeros when no row exists or sample is too small.
+ */
+export async function getCalibrationOffsets(
+  supabase: SupabaseClient,
+  userId: string,
+  category: Category
+): Promise<{ evaluationOffset: number; scoreOffset: number }> {
+  const { data } = await supabase
+    .from("calibration_offsets")
+    .select("current_offset, score_offset, total_validations")
+    .eq("user_id", userId)
+    .eq("category", category)
+    .maybeSingle();
+
+  if (!data) return { evaluationOffset: 0, scoreOffset: 0 };
+  const row = data as {
+    current_offset: number | string;
+    score_offset: number | string | null;
+    total_validations: number;
+  };
+  if (row.total_validations < 3) return { evaluationOffset: 0, scoreOffset: 0 };
+  return {
+    evaluationOffset: Number(row.current_offset),
+    scoreOffset: Number(row.score_offset ?? 0),
+  };
 }

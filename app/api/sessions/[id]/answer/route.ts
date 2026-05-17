@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { applyRating, type FsrsRating } from "@/lib/fsrs/scheduler";
 import { trackAICall } from "@/lib/ai/track";
 import { validateOpenAnswer } from "@/lib/ai/validate-open";
-import { getCalibrationOffset } from "@/lib/calibration/aggregator";
+import { getCalibrationOffsets } from "@/lib/calibration/aggregator";
 import type { Category, Item } from "@/lib/db/types";
 
 const AnswerBodySchema = z.object({
@@ -116,7 +116,7 @@ export async function POST(
       return NextResponse.json({ error: "item missing answer_reference" }, { status: 500 });
     }
 
-    const calibrationOffset = await getCalibrationOffset(
+    const { evaluationOffset, scoreOffset } = await getCalibrationOffsets(
       supabase,
       user.id,
       itemTyped.category as Category
@@ -131,14 +131,20 @@ export async function POST(
         model: "claude-sonnet-4-6",
         materialId: itemTyped.material_id,
         sessionId,
-        metadata: { item_id, category: itemTyped.category, calibration_offset: calibrationOffset },
+        metadata: {
+          item_id,
+          category: itemTyped.category,
+          calibration_offset: evaluationOffset,
+          score_offset: scoreOffset,
+        },
         call: () =>
           validateOpenAnswer({
             category: itemTyped.category as Category,
             question: itemTyped.question,
             referenceAnswer: itemTyped.answer_reference!,
             userAnswer: user_answer.trim(),
-            calibrationOffset,
+            calibrationOffset: evaluationOffset,
+            scoreOffset,
           }).then((r) => ({ result: r.result, usage: r.usage })),
       });
       validation = tracked.result;
@@ -156,6 +162,7 @@ export async function POST(
         session_id: sessionId,
         user_answer: user_answer.trim(),
         ai_evaluation: validation.evaluation,
+        score: validation.score,
         ai_feedback_positive: validation.feedback_positive,
         ai_feedback_negative: validation.feedback_negative,
         response_time_ms,
@@ -174,6 +181,7 @@ export async function POST(
     return NextResponse.json({
       review_id: review.id,
       evaluation: validation.evaluation,
+      score: validation.score,
       feedback_positive: validation.feedback_positive,
       feedback_negative: validation.feedback_negative,
     });

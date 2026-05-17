@@ -11,6 +11,7 @@ import type { TokenUsage } from "./pricing";
 
 const ValidateOpenSchema = z.object({
   evaluation: z.enum(["correct", "partially_correct", "incorrect"]),
+  score: z.number().int().min(1).max(10),
   feedback_positive: z.string().default(""),
   feedback_negative: z.string().default(""),
 });
@@ -24,6 +25,8 @@ export interface ValidateOpenInput {
   userAnswer: string;
   /** Optional calibration offset in [-1, +1]; 0 means neutral. */
   calibrationOffset?: number;
+  /** Optional score calibration offset in [-2, +2]; 0 means neutral. */
+  scoreOffset?: number;
 }
 
 export interface ValidateOpenResponse {
@@ -40,7 +43,11 @@ export async function validateOpenAnswer(input: ValidateOpenInput): Promise<Vali
 
   const out = await complete({
     model: "claude-sonnet-4-6",
-    systemPrompt: buildValidateOpenSystemPrompt(input.category, input.calibrationOffset ?? 0),
+    systemPrompt: buildValidateOpenSystemPrompt(
+      input.category,
+      input.calibrationOffset ?? 0,
+      input.scoreOffset ?? 0
+    ),
     userMessage,
     maxTokens: 600,
     temperature: 0.3,

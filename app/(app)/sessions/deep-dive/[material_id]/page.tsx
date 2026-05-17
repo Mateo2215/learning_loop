@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, use } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { AlertTriangle, Check, Smile } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,7 @@ import { Kbd } from "@/components/ui/kbd";
 import { ProgressStrip } from "@/components/shared/progress-strip";
 import { AnswerInput } from "@/components/sessions/answer-input";
 import { SessionHeader } from "@/components/sessions/session-header";
+import { ScoreBadge } from "@/components/sessions/score-badge";
 import { startSession, type ActiveSessionInfo } from "@/lib/sessions/start-client";
 import { ActiveSessionPrompt } from "@/components/sessions/active-session-prompt";
 import { ScreenMessage } from "@/components/sessions/screen-message";
@@ -39,6 +40,7 @@ interface SessionStartResponse {
 interface AnswerResponse {
   review_id: string;
   evaluation: "correct" | "partially_correct" | "incorrect";
+  score: number;
   feedback_positive: string;
   feedback_negative: string;
 }
@@ -48,6 +50,8 @@ type Phase = "loading" | "empty" | "conflict" | "answering" | "validating" | "fe
 export default function DeepDivePage({ params }: { params: Promise<{ material_id: string }> }) {
   const { material_id } = use(params);
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const focusItemId = searchParams.get("focus");
 
   const [phase, setPhase] = useState<Phase>("loading");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -69,6 +73,7 @@ export default function DeepDivePage({ params }: { params: Promise<{ material_id
       material_id,
       item_count: DEEP_DIVE_ROUND_SIZE,
       force,
+      focus_item_ids: focusItemId ? [focusItemId] : undefined,
     });
     if (result.kind === "conflict") {
       setActiveConflict(result.active);
@@ -95,7 +100,7 @@ export default function DeepDivePage({ params }: { params: Promise<{ material_id
     setCalibrationPicked(null);
     setQuestionShownAt(Date.now());
     setPhase(data.items.length === 0 ? "empty" : "answering");
-  }, [material_id]);
+  }, [material_id, focusItemId]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -388,7 +393,10 @@ function FeedbackCard({
   return (
     <Card>
       <CardHeader>
-        <CardTitle className={`text-base ${cls}`}>{label}</CardTitle>
+        <div className="flex items-start justify-between gap-4">
+          <CardTitle className={`text-base ${cls}`}>{label}</CardTitle>
+          <ScoreBadge score={feedback.score} size="md" />
+        </div>
       </CardHeader>
       <CardContent className="space-y-3 text-sm">
         {feedback.feedback_positive && (

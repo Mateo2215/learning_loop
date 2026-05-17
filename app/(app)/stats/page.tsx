@@ -4,6 +4,9 @@ import { createClient } from "@/lib/supabase/server";
 import { SectionHeader } from "@/components/shared/section-header";
 import { KPICard } from "@/components/shared/kpi-card";
 import { ActivityChart, type ActivityChartDatum } from "@/components/stats/activity-chart";
+import { ScoreSparkline } from "@/components/stats/score-sparkline";
+import { ScoreBadge, tierForScore } from "@/components/sessions/score-badge";
+import { computeScoreSummary } from "@/lib/stats/score-summary";
 
 interface ReviewRow {
   id: string;
@@ -36,6 +39,7 @@ export default async function StatsPage() {
     { count: sessionsCount },
     { count: auditsDoneCount },
     { data: thirtyDayReviews },
+    scoreSummary,
   ] = await Promise.all([
     supabase
       .from("reviews")
@@ -71,6 +75,7 @@ export default async function StatsPage() {
       .select("ai_evaluation, fsrs_rating, created_at")
       .eq("user_id", user.id)
       .gte("created_at", thirtyDaysAgo.toISOString()),
+    computeScoreSummary(supabase, user.id),
   ]);
 
   const reviews = (reviewRows ?? []) as ReviewRow[];
@@ -167,6 +172,8 @@ export default async function StatsPage() {
         <ActivityChart data={chartData} />
       </div>
 
+      <ScoreSection summary={scoreSummary} />
+
       <div className="bg-accent-soft border border-accent/30 rounded-2xl p-6 mt-8 flex items-center justify-between gap-4">
         <div>
           <div className="font-mono text-[11px] uppercase tracking-[0.15em] text-accent">
@@ -241,6 +248,106 @@ function formatWeekLabel(d: Date): string {
 
 function sum<T>(arr: T[], fn: (x: T) => number): number {
   return arr.reduce((s, x) => s + fn(x), 0);
+}
+
+type ScoreSummary = Awaited<ReturnType<typeof computeScoreSummary>>;
+
+function ScoreSection({ summary }: { summary: ScoreSummary }) {
+  const { per_material, weakest_items } = summary;
+  if (per_material.length === 0 && weakest_items.length === 0) return null;
+
+  return (
+    <div className="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div className="bg-surface border border-line rounded-2xl p-4 sm:p-6">
+        <h3 className="font-serif text-[20px] font-medium leading-tight sm:text-[22px]">
+          Trend Deep Dive
+        </h3>
+        <p className="mt-2 text-[12px] text-muted">
+          Średni score (1-10) z otwartych pytań per materiał. Sparkline pokazuje ostatnie odpowiedzi.
+        </p>
+        {per_material.length === 0 ? (
+          <p className="mt-6 text-[13px] text-muted">
+            Potrzeba minimum 3 odpowiedzi w materiale, żeby pokazać trend.
+          </p>
+        ) : (
+          <ul className="mt-4 divide-y divide-line">
+            {per_material.map((m) => (
+              <li key={m.material_id} className="py-3 flex items-center gap-4">
+                <Link
+                  href={`/materials/${m.material_id}`}
+                  className="flex-1 min-w-0 hover:opacity-80"
+                >
+                  <div className="text-[14px] text-fg truncate">{m.title}</div>
+                  <div className="text-[11px] text-muted mt-0.5">
+                    {m.samples} odpowiedzi · ostatnie 10: {m.avg_recent.toFixed(1)}/10
+                  </div>
+                </Link>
+                <div className="text-subtle shrink-0">
+                  <ScoreSparkline points={m.trend} width={120} height={32} />
+                </div>
+                <ScoreBadge score={Math.round(m.avg_recent)} size="sm" caption={false} />
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      <div className="bg-surface border border-line rounded-2xl p-4 sm:p-6">
+        <h3 className="font-serif text-[20px] font-medium leading-tight sm:text-[22px]">
+          Do powtórki
+        </h3>
+        <p className="mt-2 text-[12px] text-muted">
+          Pytania z najniższym score (ostatnie 30 dni). Kliknij, żeby zacząć powtórkę.
+        </p>
+        {weakest_items.length === 0 ? (
+          <p className="mt-6 text-[13px] text-muted">
+            Brak pytań z niskim score w ostatnich 30 dniach. Czysta tablica.
+          </p>
+        ) : (
+          <ul className="mt-4 divide-y divide-line">
+            {weakest_items.map((it) => {
+              const tier = tierForScore(it.worst_score);
+              const ringCls =
+                tier === "low" ? "border-bad text-bad bg-bad/10" :
+                tier === "mid" ? "border-warn text-warn bg-warn/10" :
+                "border-ok text-ok bg-ok/10";
+              return (
+                <li key={it.item_id} className="py-3">
+                  <Link
+                    href={`/sessions/deep-dive/${it.material_id}?focus=${it.item_id}`}
+                    className="flex items-start gap-3 hover:opacity-90"
+                  >
+                    <div
+                      className={`shrink-0 mt-0.5 rounded-full border-2 h-9 w-9 flex items-center justify-center font-mono text-[12px] font-semibold tabular-nums ${ringCls}`}
+                    >
+                      {it.worst_score}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-[13px] text-fg line-clamp-2">{it.question}</div>
+                      <div className="text-[11px] text-muted mt-1">
+                        {it.material_title} · {formatRelativeDate(it.latest_at)}
+                      </div>
+                    </div>
+                    <div className="text-[11px] text-accent shrink-0 self-center">Powtórz →</div>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function formatRelativeDate(iso: string): string {
+  const then = new Date(iso).getTime();
+  const days = Math.floor((Date.now() - then) / 86_400_000);
+  if (days <= 0) return "dziś";
+  if (days === 1) return "wczoraj";
+  if (days < 7) return `${days} dni temu`;
+  if (days < 30) return `${Math.floor(days / 7)} tyg. temu`;
+  return new Date(iso).toLocaleDateString("pl-PL", { day: "2-digit", month: "2-digit" });
 }
 
 function formatUsd(n: number): string {

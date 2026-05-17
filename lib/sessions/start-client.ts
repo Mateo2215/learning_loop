@@ -29,6 +29,8 @@ export interface StartSessionInput {
   force?: boolean;
   shuffle?: boolean;
   bypass_new_limit?: boolean;
+  /** Deep Dive only: prioritize these item ids. */
+  focus_item_ids?: string[];
 }
 
 function detectDevice(): "desktop" | "mobile" {

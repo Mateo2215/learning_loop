@@ -19,6 +19,8 @@ const StartBodySchema = z.object({
   force: z.boolean().default(false),
   shuffle: z.boolean().default(false),
   bypass_new_limit: z.boolean().default(false),
+  /** Deep Dive only: prioritize these items first (e.g. from "weakest" stats). */
+  focus_item_ids: z.array(z.string().uuid()).optional(),
 });
 
 /**
@@ -48,7 +50,7 @@ export async function POST(request: NextRequest) {
       { status: 400 }
     );
   }
-  const { mode, material_id, audit_id, item_count, device, force, shuffle, bypass_new_limit } = parsed.data;
+  const { mode, material_id, audit_id, item_count, device, force, shuffle, bypass_new_limit, focus_item_ids } = parsed.data;
 
   if (mode === "deep_dive" && !material_id) {
     return NextResponse.json(
@@ -184,7 +186,8 @@ export async function POST(request: NextRequest) {
     supabase,
     user.id,
     material_id!,
-    capDeepDiveRoundSize(item_count)
+    capDeepDiveRoundSize(item_count),
+    focus_item_ids,
   );
 
   if (items.length === 0) {
@@ -486,7 +489,8 @@ async function selectDeepDiveItems(
   supabase: Awaited<ReturnType<typeof createClient>>,
   userId: string,
   materialId: string,
-  limit: number
+  limit: number,
+  focusItemIds?: string[],
 ): Promise<ReviewItem[]> {
   const { data } = await supabase
     .from("items")
@@ -504,18 +508,31 @@ async function selectDeepDiveItems(
   const latestReviewByItem = await getLatestReviewByItem(supabase, userId, items.map((item) => item.id));
   const originalOrder = new Map(items.map((item, index) => [item.id, index]));
 
-  return [...items]
-    .sort((a, b) => {
-      const aReviewedAt = latestReviewByItem.get(a.id);
-      const bReviewedAt = latestReviewByItem.get(b.id);
-      if (!aReviewedAt && bReviewedAt) return -1;
-      if (aReviewedAt && !bReviewedAt) return 1;
-      if (!aReviewedAt && !bReviewedAt) {
-        return (originalOrder.get(a.id) ?? 0) - (originalOrder.get(b.id) ?? 0);
-      }
-      return new Date(aReviewedAt!).getTime() - new Date(bReviewedAt!).getTime();
-    })
-    .slice(0, limit);
+  const focusSet = new Set(focusItemIds ?? []);
+  const inFocus = focusSet.size > 0
+    ? items.filter((item) => focusSet.has(item.id))
+    : [];
+  const rest = focusSet.size > 0
+    ? items.filter((item) => !focusSet.has(item.id))
+    : items;
+
+  const sortByStaleness = (a: ReviewItem, b: ReviewItem) => {
+    const aReviewedAt = latestReviewByItem.get(a.id);
+    const bReviewedAt = latestReviewByItem.get(b.id);
+    if (!aReviewedAt && bReviewedAt) return -1;
+    if (aReviewedAt && !bReviewedAt) return 1;
+    if (!aReviewedAt && !bReviewedAt) {
+      return (originalOrder.get(a.id) ?? 0) - (originalOrder.get(b.id) ?? 0);
+    }
+    return new Date(aReviewedAt!).getTime() - new Date(bReviewedAt!).getTime();
+  };
+
+  // Focus items go first (in caller's order), then the standard ordering fills the rest.
+  const focusOrdered = focusItemIds
+    ? focusItemIds.map((id) => inFocus.find((it) => it.id === id)).filter((it): it is ReviewItem => Boolean(it))
+    : [];
+
+  return [...focusOrdered, ...[...rest].sort(sortByStaleness)].slice(0, limit);
 }
 
 async function selectDeepDiveItemsByIds(
