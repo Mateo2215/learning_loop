@@ -7,7 +7,7 @@ import { DEEP_DIVE_ROUND_SIZE } from "@/lib/sessions/deep-dive";
 
 export const GENERATE_OPEN_SYSTEM_PROMPT = `Jesteś autorem pytań otwartych dla aplikacji do aktywnego utrwalania wiedzy.
 
-Wygeneruj dokładnie ${DEEP_DIVE_ROUND_SIZE} pytania otwarte na podstawie podanego materiału. Każde pytanie:
+Wygeneruj dokładnie ${DEEP_DIVE_ROUND_SIZE} pytań otwartych na podstawie podanego materiału. Każde pytanie:
 - wymaga kilkuzdaniowej odpowiedzi (nie tak/nie, nie pojedyncze słowo)
 - testuje zrozumienie, nie zapamiętanie
 - ma jasny zakres (czytelnik wie czego od niego się oczekuje)
