@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { BookOpen } from "lucide-react";
+import { BookOpen, ArrowRight } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { Button } from "@/components/ui/button";
 import { Chip } from "@/components/ui/chip";
@@ -23,10 +23,35 @@ interface ActiveDeepDive {
   planned: number;
 }
 
-export default async function DeepDiveSelectorPage() {
+interface DeepDiveStats {
+  total_open: number;
+  due_today: number;
+  mastered: number;
+  total_reviews: number;
+  avg_score_pct: number | null;
+  sample_size: number;
+  last_session_ended_at: string | null;
+  sparkline: number[];
+  last_review: {
+    question: string;
+    user_answer: string | null;
+    ai_evaluation: string | null;
+    ai_feedback_positive: string | null;
+    ai_feedback_negative: string | null;
+  } | null;
+}
+
+export default async function DeepDiveSelectorPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ preview?: string }>;
+}) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
+
+  const params = await searchParams;
+  const previewId = params.preview ?? null;
 
   const { data: materials } = await supabase
     .from("materials")
@@ -100,6 +125,14 @@ export default async function DeepDiveSelectorPage() {
     }
   }
 
+  const previewMaterial = previewId
+    ? enriched.find((m) => m.id === previewId) ?? null
+    : null;
+
+  const previewStats: DeepDiveStats | null = previewMaterial
+    ? await fetchDeepDiveStats(supabase, user.id, previewMaterial.id)
+    : null;
+
   return (
     <div className="max-w-[1024px] mx-auto px-6 py-10">
       <SectionHeader
@@ -142,46 +175,314 @@ export default async function DeepDiveSelectorPage() {
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr] gap-8 mt-8">
           <ul className="space-y-2">
-            {enriched.map((m) => (
-              <li key={m.id}>
-                <Link
-                  href={`/sessions/deep-dive/${m.id}`}
-                  className={`block bg-surface border rounded-xl p-4 hover:border-line-strong transition-colors ${
-                    activeDeepDive?.material_id === m.id ? "border-accent/60" : "border-line"
-                  }`}
-                >
-                  <div className="flex items-center gap-2 mb-2">
-                    <Chip variant="default" size="sm">
-                      {CATEGORY_LABELS[m.category]}
-                    </Chip>
-                    {activeDeepDive?.material_id === m.id && (
-                      <span className="font-mono text-[10px] uppercase tracking-wide text-accent">
-                        Kontynuuj
-                      </span>
-                    )}
-                  </div>
-                  <h3 className="font-serif text-[15px] leading-snug line-clamp-2">{m.title}</h3>
-                  <p className="font-mono text-[11px] text-muted mt-2">
-                    {m.open_count} {m.open_count === 1 ? "pytanie w puli" : "pytań w puli"} · runda{" "}
-                    {Math.min(m.open_count, DEEP_DIVE_ROUND_SIZE)}
-                  </p>
-                </Link>
-              </li>
-            ))}
+            {enriched.map((m) => {
+              const isSelected = previewId === m.id;
+              return (
+                <li key={m.id}>
+                  <Link
+                    href={`/sessions/deep-dive?preview=${m.id}`}
+                    scroll={false}
+                    className={`block bg-surface border rounded-xl p-4 transition-colors ${
+                      isSelected
+                        ? "border-accent/60 bg-accent-soft/40"
+                        : activeDeepDive?.material_id === m.id
+                        ? "border-accent/60 hover:border-line-strong"
+                        : "border-line hover:border-line-strong"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 mb-2">
+                      <Chip variant="default" size="sm">
+                        {CATEGORY_LABELS[m.category]}
+                      </Chip>
+                      {activeDeepDive?.material_id === m.id && (
+                        <span className="font-mono text-[10px] uppercase tracking-wide text-accent">
+                          Kontynuuj
+                        </span>
+                      )}
+                    </div>
+                    <h3 className="font-serif text-[15px] leading-snug line-clamp-2">{m.title}</h3>
+                    <p className="font-mono text-[11px] text-muted mt-2">
+                      {m.open_count} {m.open_count === 1 ? "pytanie w puli" : "pytań w puli"} · runda{" "}
+                      {Math.min(m.open_count, DEEP_DIVE_ROUND_SIZE)}
+                    </p>
+                  </Link>
+                </li>
+              );
+            })}
           </ul>
 
-          <div className="bg-surface border border-line rounded-2xl p-8 lg:min-h-[360px] flex flex-col items-center justify-center text-center gap-4">
-            <div className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted">
-              Wybierz materiał
+          {previewMaterial && previewStats ? (
+            <PreviewPanel material={previewMaterial} stats={previewStats} />
+          ) : (
+            <div className="bg-surface border border-line rounded-2xl p-8 lg:min-h-[360px] flex flex-col items-center justify-center text-center gap-4">
+              <div className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted">
+                Wybierz materiał
+              </div>
+              <BookOpen size={48} className="text-muted" />
+              <p className="text-[14px] text-muted max-w-sm">
+                Kliknij materiał z listy obok, żeby zobaczyć statystyki i zacząć Deep Dive.
+              </p>
             </div>
-            <BookOpen size={48} className="text-muted" />
-            <p className="text-[14px] text-muted max-w-sm">
-              Po wyborze materiału z listy obok zaczniesz krótką rundę Deep Dive - AI oceni Twoje
-              odpowiedzi i pomoże zidentyfikować luki.
-            </p>
-          </div>
+          )}
         </div>
       )}
     </div>
   );
+}
+
+function PreviewPanel({
+  material,
+  stats,
+}: {
+  material: MaterialOption;
+  stats: DeepDiveStats;
+}) {
+  return (
+    <div className="bg-surface border border-line rounded-2xl p-8 flex flex-col gap-6">
+      <header>
+        <Chip variant="default" size="sm">
+          {CATEGORY_LABELS[material.category]}
+        </Chip>
+        <h2 className="font-serif text-[24px] tracking-[-0.01em] leading-tight mt-3 text-fg">
+          {material.title}
+        </h2>
+      </header>
+
+      <div className="grid grid-cols-2 gap-x-6 gap-y-5">
+        <StatBlock
+          label="Pytań otwartych"
+          value={`${stats.total_open}`}
+          sub={stats.due_today > 0 ? `${stats.due_today} due dzisiaj` : `${stats.mastered} opanowanych`}
+        />
+        <StatBlock
+          label="Średnia ocena AI"
+          value={stats.avg_score_pct === null ? "—" : `${stats.avg_score_pct}%`}
+          sub={stats.sample_size > 0 ? `z ostatnich ${stats.sample_size}` : "brak danych"}
+        />
+        <StatBlock
+          label="Ostatnia sesja"
+          value={stats.last_session_ended_at ? formatRelative(stats.last_session_ended_at) : "—"}
+          sub={stats.last_session_ended_at ? "" : "jeszcze nie zaczynałeś"}
+        />
+        <StatBlock
+          label="Liczba powtórek"
+          value={`${stats.total_reviews}`}
+          sub={stats.total_reviews === 1 ? "1 odpowiedź" : `${stats.total_reviews} odpowiedzi`}
+        />
+      </div>
+
+      {stats.sparkline.length >= 2 && (
+        <div>
+          <div className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted mb-2">
+            Trend
+          </div>
+          <Sparkline values={stats.sparkline} />
+        </div>
+      )}
+
+      {stats.last_review && (
+        <details className="border-t border-line pt-4">
+          <summary className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted cursor-pointer hover:text-fg transition-colors">
+            Ostatnia odpowiedź
+          </summary>
+          <div className="mt-3 space-y-2 text-[13px]">
+            <p className="text-fg">{stats.last_review.question}</p>
+            {stats.last_review.user_answer && (
+              <p className="text-subtle italic">„{stats.last_review.user_answer}"</p>
+            )}
+            {stats.last_review.ai_feedback_positive && (
+              <p className="text-muted">
+                <span className="text-accent">+ </span>
+                {stats.last_review.ai_feedback_positive}
+              </p>
+            )}
+            {stats.last_review.ai_feedback_negative && (
+              <p className="text-muted">
+                <span className="text-bad">− </span>
+                {stats.last_review.ai_feedback_negative}
+              </p>
+            )}
+          </div>
+        </details>
+      )}
+
+      <div className="flex items-center justify-end pt-2 border-t border-line">
+        <Button asChild className="min-h-10">
+          <Link href={`/sessions/deep-dive/${material.id}`}>
+            Powtórz materiał
+            <ArrowRight className="h-4 w-4 ml-1" />
+          </Link>
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function StatBlock({ label, value, sub }: { label: string; value: string; sub?: string }) {
+  return (
+    <div>
+      <div className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted mb-1">
+        {label}
+      </div>
+      <div className="font-serif text-[24px] leading-none tracking-[-0.01em] text-fg">
+        {value}
+      </div>
+      {sub && <div className="font-mono text-[10px] text-muted mt-1">{sub}</div>}
+    </div>
+  );
+}
+
+function Sparkline({ values }: { values: number[] }) {
+  const w = 120;
+  const h = 30;
+  const max = Math.max(...values, 1);
+  const min = Math.min(...values, 0);
+  const range = Math.max(max - min, 0.001);
+  const stepX = values.length > 1 ? w / (values.length - 1) : 0;
+  const points = values
+    .map((v, i) => {
+      const x = i * stepX;
+      const y = h - ((v - min) / range) * h;
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    })
+    .join(" ");
+
+  return (
+    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} className="text-accent">
+      <polyline
+        points={points}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+async function fetchDeepDiveStats(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+  materialId: string,
+): Promise<DeepDiveStats> {
+  const nowIso = new Date().toISOString();
+
+  const [
+    { data: openItems },
+    { count: totalReviews },
+    { data: recentReviews },
+    { data: lastReviewRows },
+    { data: lastSession },
+  ] = await Promise.all([
+    supabase
+      .from("items")
+      .select("id, fsrs_due_date, fsrs_review_count")
+      .eq("user_id", userId)
+      .eq("material_id", materialId)
+      .eq("type", "open")
+      .eq("is_suspended", false),
+    supabase
+      .from("reviews")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", userId)
+      .eq("material_id", materialId),
+    supabase
+      .from("reviews")
+      .select("ai_evaluation, created_at")
+      .eq("user_id", userId)
+      .eq("material_id", materialId)
+      .order("created_at", { ascending: false })
+      .limit(20),
+    supabase
+      .from("reviews")
+      .select("item_id, user_answer, ai_evaluation, ai_feedback_positive, ai_feedback_negative, created_at")
+      .eq("user_id", userId)
+      .eq("material_id", materialId)
+      .order("created_at", { ascending: false })
+      .limit(1),
+    supabase
+      .from("sessions")
+      .select("ended_at")
+      .eq("user_id", userId)
+      .eq("material_id", materialId)
+      .eq("mode", "deep_dive")
+      .not("ended_at", "is", null)
+      .order("ended_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ]);
+
+  const items = (openItems ?? []) as { id: string; fsrs_due_date: string | null; fsrs_review_count: number | null }[];
+  const totalOpen = items.length;
+  const dueToday = items.filter((i) => i.fsrs_due_date && i.fsrs_due_date <= nowIso).length;
+  const mastered = items.filter((i) => (i.fsrs_review_count ?? 0) >= 3).length;
+
+  const reviewsRows = (recentReviews ?? []) as { ai_evaluation: string | null; created_at: string }[];
+  let avgScorePct: number | null = null;
+  let sparkline: number[] = [];
+  if (reviewsRows.length > 0) {
+    const scores = reviewsRows.map((r) => scoreFromEvaluation(r.ai_evaluation));
+    const sum = scores.reduce((a, b) => a + b, 0);
+    avgScorePct = Math.round((sum / scores.length) * 100);
+    sparkline = scores.slice(0, 10).reverse();
+  }
+
+  const lastReviewRow = (lastReviewRows ?? [])[0] as
+    | {
+        item_id: string;
+        user_answer: string | null;
+        ai_evaluation: string | null;
+        ai_feedback_positive: string | null;
+        ai_feedback_negative: string | null;
+      }
+    | undefined;
+
+  let lastReview: DeepDiveStats["last_review"] = null;
+  if (lastReviewRow) {
+    const { data: itemRow } = await supabase
+      .from("items")
+      .select("question")
+      .eq("id", lastReviewRow.item_id)
+      .maybeSingle();
+    lastReview = {
+      question: (itemRow as { question: string } | null)?.question ?? "",
+      user_answer: lastReviewRow.user_answer,
+      ai_evaluation: lastReviewRow.ai_evaluation,
+      ai_feedback_positive: lastReviewRow.ai_feedback_positive,
+      ai_feedback_negative: lastReviewRow.ai_feedback_negative,
+    };
+  }
+
+  return {
+    total_open: totalOpen,
+    due_today: dueToday,
+    mastered,
+    total_reviews: totalReviews ?? 0,
+    avg_score_pct: avgScorePct,
+    sample_size: reviewsRows.length,
+    last_session_ended_at: (lastSession as { ended_at: string } | null)?.ended_at ?? null,
+    sparkline,
+    last_review: lastReview,
+  };
+}
+
+function scoreFromEvaluation(ev: string | null): number {
+  if (ev === "correct") return 1;
+  if (ev === "partially_correct") return 0.5;
+  return 0;
+}
+
+function formatRelative(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const minutes = Math.floor(diff / 60_000);
+  if (minutes < 60) return minutes <= 1 ? "przed chwilą" : `${minutes} min temu`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} ${hours === 1 ? "godz." : "godz."} temu`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days} ${days === 1 ? "dzień" : "dni"} temu`;
+  const weeks = Math.floor(days / 7);
+  if (weeks < 5) return `${weeks} ${weeks === 1 ? "tydz." : "tyg."} temu`;
+  const months = Math.floor(days / 30);
+  return `${months} ${months === 1 ? "mies." : "mies."} temu`;
 }
