@@ -131,7 +131,7 @@ export async function processMaterial(ctx: PipelineContext): Promise<{ materialI
       supabase,
       userId,
       operation: "generate_cloze",
-      model: "claude-haiku-4-5",
+      model: "claude-sonnet-4-6",
       materialId,
       metadata: { jobId },
       call: () => generateClozeCards(compressed).then((r) => ({ result: r.cards, usage: r.usage })),

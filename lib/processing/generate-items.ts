@@ -75,7 +75,7 @@ export interface GenerateClozeResult {
 
 export async function generateClozeCards(compressedContent: string): Promise<GenerateClozeResult> {
   const out = await complete({
-    model: "claude-haiku-4-5",
+    model: "claude-sonnet-4-6",
     systemPrompt: GENERATE_CLOZE_SYSTEM_PROMPT,
     userMessage: `Materiał:\n\n${compressedContent}`,
     maxTokens: 4000,

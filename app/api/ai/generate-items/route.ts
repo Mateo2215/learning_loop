@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
       supabase,
       userId: user.id,
       operation: "generate_cloze",
-      model: "claude-haiku-4-5",
+      model: "claude-sonnet-4-6",
       materialId,
       call: async () => {
         const r = await generateClozeCards(material.content_compressed!);
