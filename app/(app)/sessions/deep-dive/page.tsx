@@ -28,14 +28,14 @@ interface DeepDiveStats {
   due_today: number;
   mastered: number;
   total_reviews: number;
-  avg_score_pct: number | null;
+  avg_score: number | null;
   sample_size: number;
   last_session_ended_at: string | null;
   sparkline: number[];
   last_review: {
     question: string;
     user_answer: string | null;
-    ai_evaluation: string | null;
+    score: number | null;
     ai_feedback_positive: string | null;
     ai_feedback_negative: string | null;
   } | null;
@@ -256,7 +256,7 @@ function PreviewPanel({
         />
         <StatBlock
           label="Średnia ocena AI"
-          value={stats.avg_score_pct === null ? "—" : `${stats.avg_score_pct}%`}
+          value={stats.avg_score === null ? "—" : `${stats.avg_score.toFixed(1)}/10`}
           sub={stats.sample_size > 0 ? `z ostatnich ${stats.sample_size}` : "brak danych"}
         />
         <StatBlock
@@ -284,6 +284,9 @@ function PreviewPanel({
         <details className="border-t border-line pt-4">
           <summary className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted cursor-pointer hover:text-fg transition-colors">
             Ostatnia odpowiedź
+            {stats.last_review.score !== null && (
+              <span className="ml-2 text-fg">· {stats.last_review.score}/10</span>
+            )}
           </summary>
           <div className="mt-3 space-y-2 text-[13px]">
             <p className="text-fg">{stats.last_review.question}</p>
@@ -395,7 +398,7 @@ async function fetchDeepDiveStats(
       due_today: 0,
       mastered: 0,
       total_reviews: 0,
-      avg_score_pct: null,
+      avg_score: null,
       sample_size: 0,
       last_session_ended_at: null,
       sparkline: [],
@@ -416,15 +419,15 @@ async function fetchDeepDiveStats(
       .in("item_id", openItemIds),
     supabase
       .from("reviews")
-      .select("ai_evaluation, created_at")
+      .select("score, created_at")
       .eq("user_id", userId)
       .in("item_id", openItemIds)
-      .not("ai_evaluation", "is", null)
+      .not("score", "is", null)
       .order("created_at", { ascending: false })
       .limit(20),
     supabase
       .from("reviews")
-      .select("item_id, user_answer, ai_evaluation, ai_feedback_positive, ai_feedback_negative, created_at")
+      .select("item_id, user_answer, score, ai_feedback_positive, ai_feedback_negative, created_at")
       .eq("user_id", userId)
       .in("item_id", openItemIds)
       .order("created_at", { ascending: false })
@@ -441,21 +444,21 @@ async function fetchDeepDiveStats(
       .maybeSingle(),
   ]);
 
-  const reviewsRows = (recentReviews ?? []) as { ai_evaluation: string | null; created_at: string }[];
-  let avgScorePct: number | null = null;
+  const reviewsRows = (recentReviews ?? []) as { score: number | null; created_at: string }[];
+  const scoredRows = reviewsRows.filter((r): r is { score: number; created_at: string } => r.score !== null);
+  let avgScore: number | null = null;
   let sparkline: number[] = [];
-  if (reviewsRows.length > 0) {
-    const scores = reviewsRows.map((r) => scoreFromEvaluation(r.ai_evaluation));
-    const sum = scores.reduce((a, b) => a + b, 0);
-    avgScorePct = Math.round((sum / scores.length) * 100);
-    sparkline = scores.slice(0, 10).reverse();
+  if (scoredRows.length > 0) {
+    const sum = scoredRows.reduce((a, r) => a + r.score, 0);
+    avgScore = sum / scoredRows.length;
+    sparkline = scoredRows.slice(0, 10).map((r) => r.score).reverse();
   }
 
   const lastReviewRow = (lastReviewRows ?? [])[0] as
     | {
         item_id: string;
         user_answer: string | null;
-        ai_evaluation: string | null;
+        score: number | null;
         ai_feedback_positive: string | null;
         ai_feedback_negative: string | null;
       }
@@ -466,7 +469,7 @@ async function fetchDeepDiveStats(
     lastReview = {
       question: questionById.get(lastReviewRow.item_id) ?? "",
       user_answer: lastReviewRow.user_answer,
-      ai_evaluation: lastReviewRow.ai_evaluation,
+      score: lastReviewRow.score,
       ai_feedback_positive: lastReviewRow.ai_feedback_positive,
       ai_feedback_negative: lastReviewRow.ai_feedback_negative,
     };
@@ -477,18 +480,12 @@ async function fetchDeepDiveStats(
     due_today: dueToday,
     mastered,
     total_reviews: totalReviews ?? 0,
-    avg_score_pct: avgScorePct,
-    sample_size: reviewsRows.length,
+    avg_score: avgScore,
+    sample_size: scoredRows.length,
     last_session_ended_at: (lastSession as { ended_at: string } | null)?.ended_at ?? null,
     sparkline,
     last_review: lastReview,
   };
-}
-
-function scoreFromEvaluation(ev: string | null): number {
-  if (ev === "correct") return 1;
-  if (ev === "partially_correct") return 0.5;
-  return 0;
 }
 
 function formatRelative(iso: string): string {
