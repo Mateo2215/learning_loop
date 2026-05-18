@@ -368,37 +368,65 @@ async function fetchDeepDiveStats(
 ): Promise<DeepDiveStats> {
   const nowIso = new Date().toISOString();
 
+  const { data: openItemsRaw } = await supabase
+    .from("items")
+    .select("id, question, fsrs_due_date, fsrs_review_count")
+    .eq("user_id", userId)
+    .eq("material_id", materialId)
+    .eq("type", "open")
+    .eq("is_suspended", false);
+
+  const items = (openItemsRaw ?? []) as {
+    id: string;
+    question: string;
+    fsrs_due_date: string | null;
+    fsrs_review_count: number | null;
+  }[];
+  const openItemIds = items.map((i) => i.id);
+
+  const totalOpen = items.length;
+  const dueToday = items.filter((i) => i.fsrs_due_date && i.fsrs_due_date <= nowIso).length;
+  const mastered = items.filter((i) => (i.fsrs_review_count ?? 0) >= 3).length;
+  const questionById = new Map(items.map((i) => [i.id, i.question]));
+
+  if (openItemIds.length === 0) {
+    return {
+      total_open: 0,
+      due_today: 0,
+      mastered: 0,
+      total_reviews: 0,
+      avg_score_pct: null,
+      sample_size: 0,
+      last_session_ended_at: null,
+      sparkline: [],
+      last_review: null,
+    };
+  }
+
   const [
-    { data: openItems },
     { count: totalReviews },
     { data: recentReviews },
     { data: lastReviewRows },
     { data: lastSession },
   ] = await Promise.all([
     supabase
-      .from("items")
-      .select("id, fsrs_due_date, fsrs_review_count")
-      .eq("user_id", userId)
-      .eq("material_id", materialId)
-      .eq("type", "open")
-      .eq("is_suspended", false),
-    supabase
       .from("reviews")
       .select("id", { count: "exact", head: true })
       .eq("user_id", userId)
-      .eq("material_id", materialId),
+      .in("item_id", openItemIds),
     supabase
       .from("reviews")
       .select("ai_evaluation, created_at")
       .eq("user_id", userId)
-      .eq("material_id", materialId)
+      .in("item_id", openItemIds)
+      .not("ai_evaluation", "is", null)
       .order("created_at", { ascending: false })
       .limit(20),
     supabase
       .from("reviews")
       .select("item_id, user_answer, ai_evaluation, ai_feedback_positive, ai_feedback_negative, created_at")
       .eq("user_id", userId)
-      .eq("material_id", materialId)
+      .in("item_id", openItemIds)
       .order("created_at", { ascending: false })
       .limit(1),
     supabase
@@ -412,11 +440,6 @@ async function fetchDeepDiveStats(
       .limit(1)
       .maybeSingle(),
   ]);
-
-  const items = (openItems ?? []) as { id: string; fsrs_due_date: string | null; fsrs_review_count: number | null }[];
-  const totalOpen = items.length;
-  const dueToday = items.filter((i) => i.fsrs_due_date && i.fsrs_due_date <= nowIso).length;
-  const mastered = items.filter((i) => (i.fsrs_review_count ?? 0) >= 3).length;
 
   const reviewsRows = (recentReviews ?? []) as { ai_evaluation: string | null; created_at: string }[];
   let avgScorePct: number | null = null;
@@ -440,13 +463,8 @@ async function fetchDeepDiveStats(
 
   let lastReview: DeepDiveStats["last_review"] = null;
   if (lastReviewRow) {
-    const { data: itemRow } = await supabase
-      .from("items")
-      .select("question")
-      .eq("id", lastReviewRow.item_id)
-      .maybeSingle();
     lastReview = {
-      question: (itemRow as { question: string } | null)?.question ?? "",
+      question: questionById.get(lastReviewRow.item_id) ?? "",
       user_answer: lastReviewRow.user_answer,
       ai_evaluation: lastReviewRow.ai_evaluation,
       ai_feedback_positive: lastReviewRow.ai_feedback_positive,
