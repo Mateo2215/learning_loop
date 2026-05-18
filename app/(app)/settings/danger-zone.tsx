@@ -20,7 +20,7 @@ export function DangerZone() {
         return;
       }
       toast.success("Dane wyczyszczone", {
-        description: "Historia powtórek usunięta, fiszki zresetowane do stanu nowych.",
+        description: "Materiały, fiszki, historia powtórek i koszty usunięte. Konto zachowane.",
       });
       router.refresh();
     } catch {

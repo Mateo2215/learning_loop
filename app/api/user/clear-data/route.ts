@@ -4,8 +4,13 @@ import { createClient } from "@/lib/supabase/server";
 /**
  * POST /api/user/clear-data
  *
- * Deletes all review history and resets FSRS state on all items back to "new".
- * Materials and items (questions) are preserved.
+ * Wipes all user content: materials, items, reviews, sessions, audits,
+ * gaps, costs, and calibration. The auth account is preserved.
+ *
+ * Order matters because of FK constraints. Materials cascade-delete
+ * their items, reviews, topic_audits and material_relations, but
+ * sessions, knowledge_gaps, processing_jobs, usage_logs and
+ * calibration_offsets must be cleared explicitly.
  */
 export async function POST() {
   const supabase = await createClient();
@@ -14,31 +19,12 @@ export async function POST() {
 
   const uid = user.id;
 
-  // End any active sessions first.
   await supabase.from("sessions").delete().eq("user_id", uid);
-
-  // Wipe all review history.
-  await supabase.from("reviews").delete().eq("user_id", uid);
-
-  // Reset FSRS state on all items → cards become "new" again.
-  const resetNow = new Date().toISOString();
-  await supabase
-    .from("items")
-    .update({
-      fsrs_stability: null,
-      fsrs_difficulty: null,
-      fsrs_due_date: resetNow,
-      fsrs_last_review: null,
-      fsrs_review_count: 0,
-      fsrs_lapse_count: 0,
-      is_leech: false,
-    })
-    .eq("user_id", uid);
-
-  // Clear processing jobs and calibration offsets.
+  await supabase.from("knowledge_gaps").delete().eq("user_id", uid);
+  await supabase.from("materials").delete().eq("user_id", uid);
   await supabase.from("processing_jobs").delete().eq("user_id", uid);
-  await supabase.from("calibration_offsets").delete().eq("user_id", uid);
   await supabase.from("usage_logs").delete().eq("user_id", uid);
+  await supabase.from("calibration_offsets").delete().eq("user_id", uid);
 
   return NextResponse.json({ ok: true });
 }
