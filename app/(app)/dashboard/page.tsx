@@ -64,8 +64,9 @@ export default async function DashboardPage() {
 
   const itemsTodayMinutes = Math.max(1, Math.round((dueCount ?? 0) * 0.6));
 
-  const streakDays = computeStreak(reviewDates ?? []);
-  const streakSegments = Array.from({ length: 7 }, (_, i) => i < streakDays);
+  const streakStats = computeStreakStats(reviewDates ?? []);
+  const heatmapDays = buildHeatmap(reviewDates ?? [], 30);
+  const milestoneHint = nextMilestoneHint(streakStats.current);
 
   // Round 2: count library items per material + find which open items were already answered.
   const recentIds = (recentMaterials ?? []).map((m) => m.id);
@@ -201,28 +202,39 @@ export default async function DashboardPage() {
 
       {/* Streak */}
       <section>
-        <div className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted mb-3">
+        <div className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted mb-4">
           Seria
         </div>
-        <div className="flex items-end gap-6">
-          <div className="font-serif text-[56px] leading-none tracking-[-0.015em] text-fg">
-            {streakDays}
+
+        <div className="flex items-end gap-8 mb-6">
+          <div className="font-serif text-[64px] leading-none tracking-[-0.015em] text-fg">
+            {streakStats.current >= 100 ? "100+" : streakStats.current}
           </div>
-          <div className="flex-1 grid grid-cols-7 gap-2 pb-2">
-            {streakSegments.map((filled, i) => (
+          <div
+            className="flex-1 grid gap-[5px] pb-2"
+            style={{ gridTemplateColumns: "repeat(30, minmax(0, 1fr))" }}
+            aria-label="Ostatnie 30 dni aktywności"
+          >
+            {heatmapDays.map((day) => (
               <div
-                key={i}
-                className={`h-2 rounded-full ${
-                  filled ? "bg-accent" : "bg-elevated border border-line"
-                }`}
+                key={day.date}
+                title={`${day.date}: ${day.count === 0 ? "brak powtórek" : `${day.count} ${plural(day.count, "powtórka", "powtórki", "powtórek")}`}`}
+                className={`aspect-square rounded-sm transition-opacity ${heatmapClass(day.count)}`}
               />
             ))}
           </div>
         </div>
-        <p className="mt-2 text-[12px] text-muted">
-          {streakDays === 0
+
+        <div className="grid grid-cols-3 gap-6 max-w-md">
+          <StreakMetric label="Seria" value={streakStats.current === 0 ? "—" : `${formatPl(streakStats.current)} ${plural(streakStats.current, "dzień", "dni", "dni")}`} />
+          <StreakMetric label="Rekord" value={streakStats.longest === 0 ? "—" : `${formatPl(streakStats.longest)} ${plural(streakStats.longest, "dzień", "dni", "dni")}`} />
+          <StreakMetric label="Ten miesiąc" value={`${formatPl(streakStats.thisMonth)}/30`} />
+        </div>
+
+        <p className="mt-4 text-[12px] text-muted">
+          {streakStats.current === 0
             ? "Zacznij pierwszą sesję dzisiaj."
-            : `${plural(streakDays, "dzień", "dni", "dni")} z rzędu.`}
+            : milestoneHint ?? `${plural(streakStats.current, "dzień", "dni", "dni")} z rzędu.`}
         </p>
       </section>
 
@@ -348,23 +360,113 @@ function labelForCategory(c: string): string {
   return map[c] ?? c;
 }
 
-/** Counts consecutive days (UTC) ending today on which the user had ≥1 review. */
-function computeStreak(rows: { created_at: string }[]): number {
+interface StreakStats {
+  current: number;
+  longest: number;
+  thisMonth: number;
+}
+
+/**
+ * Computes streak metrics from review timestamps (UTC dates).
+ * - current: consecutive days ending today (today optional — starts from yesterday if today empty)
+ * - longest: longest consecutive run in the 90-day window
+ * - thisMonth: unique days with ≥1 review in the last 30 calendar days
+ */
+function computeStreakStats(rows: { created_at: string }[]): StreakStats {
   const daySet = new Set(rows.map((r) => r.created_at.slice(0, 10)));
-  let streak = 0;
   const today = new Date();
+
+  let current = 0;
   for (let i = 0; i < 90; i++) {
     const d = new Date(today);
     d.setUTCDate(today.getUTCDate() - i);
     const key = d.toISOString().slice(0, 10);
     if (daySet.has(key)) {
-      streak++;
+      current++;
     } else if (i === 0) {
-      // No review today yet — check if yesterday starts a streak.
       continue;
     } else {
       break;
     }
   }
-  return streak;
+
+  let longest = 0;
+  let run = 0;
+  for (let i = 89; i >= 0; i--) {
+    const d = new Date(today);
+    d.setUTCDate(today.getUTCDate() - i);
+    const key = d.toISOString().slice(0, 10);
+    if (daySet.has(key)) {
+      run++;
+      if (run > longest) longest = run;
+    } else {
+      run = 0;
+    }
+  }
+  if (current > longest) longest = current;
+
+  let thisMonth = 0;
+  for (let i = 0; i < 30; i++) {
+    const d = new Date(today);
+    d.setUTCDate(today.getUTCDate() - i);
+    const key = d.toISOString().slice(0, 10);
+    if (daySet.has(key)) thisMonth++;
+  }
+
+  return { current, longest, thisMonth };
+}
+
+interface HeatmapDay {
+  date: string;
+  count: number;
+}
+
+/** Returns the last `days` UTC days (oldest first) with review counts per day. */
+function buildHeatmap(rows: { created_at: string }[], days: number): HeatmapDay[] {
+  const counts = new Map<string, number>();
+  for (const r of rows) {
+    const key = r.created_at.slice(0, 10);
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  const today = new Date();
+  const result: HeatmapDay[] = [];
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(today);
+    d.setUTCDate(today.getUTCDate() - i);
+    const key = d.toISOString().slice(0, 10);
+    result.push({ date: key, count: counts.get(key) ?? 0 });
+  }
+  return result;
+}
+
+function heatmapClass(count: number): string {
+  if (count === 0) return "bg-elevated border border-line";
+  if (count === 1) return "bg-accent/30";
+  if (count === 2) return "bg-accent/60";
+  return "bg-accent";
+}
+
+const STREAK_MILESTONES = [7, 14, 30, 50, 100, 200, 365];
+
+function nextMilestoneHint(current: number): string | null {
+  if (current === 0) return null;
+  const next = STREAK_MILESTONES.find((m) => m > current);
+  if (!next) return `${formatPl(current)} dni z rzędu — nowy rekord każdego dnia.`;
+  const delta = next - current;
+  if (delta > 3) return `${plural(current, "dzień", "dni", "dni")} z rzędu.`;
+  if (delta === 0) return `${formatPl(current)} dni — milestone osiągnięty.`;
+  return `Jeszcze ${formatPl(delta)} ${plural(delta, "dzień", "dni", "dni")} do ${formatPl(next)}-dniowej serii.`;
+}
+
+function StreakMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <div className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted mb-1">
+        {label}
+      </div>
+      <div className="font-mono text-[14px] text-fg">
+        {value}
+      </div>
+    </div>
+  );
 }
