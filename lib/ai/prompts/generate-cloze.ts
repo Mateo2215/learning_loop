@@ -99,12 +99,4 @@ Reguły dotyczące luk
 ============================================================
 Format wyjścia
 ============================================================
-JEDYNIE poprawny JSON, bez ozdób:
-{
-  "cards": [
-    {"front": "Pełne zdanie z {{c1::ukrytym fragmentem}}.", "answer": "ukrytym fragmentem", "difficulty": "easy|medium|hard"},
-    ...
-  ]
-}
-
-Nie dodawaj żadnego tekstu przed ani po JSON-ie. Nie używaj markdown ani \`\`\`.`;
+Wywołaj narzędzie \`submit_cloze_cards\`. Pole \`cards\` przekaż jako **natywną tablicę obiektów** — każdy obiekt to jedna fiszka z polami \`front\`, \`answer\`, \`difficulty\`. NIE pakuj fiszek w stringified JSON ani w tekst — tablica obiektów musi być natywnym argumentem narzędzia, zgodnym ze schematem.`;

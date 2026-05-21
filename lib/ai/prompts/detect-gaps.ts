@@ -24,17 +24,4 @@ Twoje zadanie:
    - "low" — do uwagi, gdy będzie czas
 3. Każdej daj zwięzły tytuł po polsku (3–8 słów) — co konkretnie nie działa. Używaj angielskich terminów technicznych jak w materiale (np. "Net Working Capital", nie "kapitał obrotowy netto").
 
-Format wyjścia: JEDYNIE poprawny JSON, bez markdown:
-{
-  "gaps": [
-    {
-      "gap_type": "low_correct_rate",
-      "title": "Słabe utrwalenie FSRS",
-      "severity": "high",
-      "affected_tags": ["FSRS"],
-      "affected_materials": []
-    }
-  ]
-}
-
-Bez tekstu przed ani po. Bez \`\`\`. Maks 8 elementów, posortowane od najwyższej severity.`;
+Format wyjścia: wywołaj narzędzie \`submit_ranked_gaps\`. Pole \`gaps\` przekaż jako **natywną tablicę obiektów** zgodnych ze schematem narzędzia, maks 8 elementów, posortowane od najwyższej severity. NIE pakuj danych w stringified JSON ani w tekst.`;

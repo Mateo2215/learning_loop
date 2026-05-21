@@ -18,12 +18,4 @@ Dla każdego pytania podaj również "answer_reference" - wzorcową odpowiedź (
 - pokazywać oczekiwany poziom szczegółowości
 - używać oryginalnych terminów technicznych (po angielsku jeśli takie są w materiale)
 
-Format wyjścia: JEDYNIE poprawny JSON, bez ozdób:
-{
-  "questions": [
-    {"question": "Pełne pytanie po polsku.", "answer_reference": "Wzorcowa odpowiedź 3-6 zdań.", "difficulty": "easy|medium|hard"},
-    ...
-  ]
-}
-
-Nie dodawaj żadnego tekstu przed ani po JSON-ie. Nie używaj markdown ani \`\`\`.`;
+Format wyjścia: wywołaj narzędzie \`submit_open_questions\`. Pole \`questions\` przekaż jako **natywną tablicę obiektów** — każde pytanie to obiekt z polami \`question\`, \`answer_reference\`, \`difficulty\`. NIE pakuj pytań w stringified JSON ani w tekst — tylko jako natywna tablica zgodna ze schematem narzędzia.`;

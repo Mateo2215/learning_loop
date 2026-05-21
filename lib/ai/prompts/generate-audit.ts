@@ -45,8 +45,5 @@ Otrzymasz skompresowaną treść materiału oraz listę pytań, które uczący s
 - używają angielskich terminów technicznych tam, gdzie są w materiale (np. "net working capital", nie "kapitał obrotowy netto")
 - są zwięzłe (1–2 zdania per pytanie)
 
-Format wyjścia: JEDYNIE poprawny JSON, bez markdown:
-{"questions": [{"question": "...", "answer_reference": "...", "difficulty": "easy|medium|hard"}]}
-
-Bez tekstu przed ani po. Bez \`\`\`. Lista 3–5 elementów.`;
+Format wyjścia: wywołaj narzędzie \`submit_audit_questions\`. Pole \`questions\` przekaż jako **natywną tablicę obiektów** (3–5 elementów) zgodnych ze schematem narzędzia. NIE pakuj pytań w stringified JSON ani w tekst.`;
 }

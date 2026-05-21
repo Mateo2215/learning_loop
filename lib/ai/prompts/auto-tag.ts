@@ -12,7 +12,4 @@ Wygeneruj 3–5 tagów opisujących materiał. Tagi mają być:
 - po polsku jeśli polski jest naturalny (np. "negocjacje", "finanse osobiste")
 - bez powtórzeń (każdy tag unikalny)
 
-Format wyjścia: JEDYNIE poprawny JSON, bez ozdób:
-{"tags": ["tag1", "tag2", "tag3"]}
-
-Nie dodawaj żadnego tekstu przed ani po JSON-ie. Nie używaj markdown ani \`\`\`.`;
+Format wyjścia: wywołaj narzędzie \`submit_tags\`. Pole \`tags\` przekaż jako **natywną tablicę stringów**, nie jako stringified JSON ani tekst.`;

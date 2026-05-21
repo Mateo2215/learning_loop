@@ -97,8 +97,5 @@ Reguły dla feedbacku:
 - nie pouczaj. Bądź zwięzły, partnerski, rzeczowy
 - używaj angielskich terminów technicznych takich jak w materiale (np. "net working capital", nie "kapitał obrotowy netto")
 
-Format wyjścia: JEDYNIE poprawny JSON, bez ozdób:
-{"evaluation": "correct|partially_correct|incorrect", "score": <liczba 1-10>, "feedback_positive": "...", "feedback_negative": "..."}
-
-Nie dodawaj żadnego tekstu przed ani po JSON-ie. Nie używaj markdown ani \`\`\`.`;
+Format wyjścia: wywołaj narzędzie \`submit_validation\` z polami \`evaluation\`, \`score\`, \`feedback_positive\`, \`feedback_negative\`. NIE pakuj tych pól w stringified JSON ani w tekst — tylko jako natywne wartości zgodne ze schematem narzędzia.`;
 }
