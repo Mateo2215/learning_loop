@@ -4,6 +4,33 @@ Session handoff log. Most recent entry on top. Keep this file under 200 lines.
 
 ---
 
+## 2026-05-21 — Pipeline AI: migracja na tool use (eliminacja `JSON.parse` failures przy imporcie)
+
+### Powód
+Import materiału wywalał się komunikatem `Expected ',' or '}' after property value in JSON at position 130 (line 4 column 106)`. Źródło: 6 callsite'ów wołało `complete()` (zwykły tekst) i parsowało odpowiedź przez `parseAIJson()` + `JSON.parse`. Model raz na ileś-tam razy zwracał JSON ze złamaną składnią (najpewniej nieescape'owany cudzysłów w treści `front`/`answer_reference`) — wszystkie 4 wbudowane warianty naprawy w `parseAIJson` padały i błąd bulgotał do UI. CLAUDE.md jawnie zalecał "Use structured output (JSON mode) for any operation that returns more than free text" — pipeline tej zasady nie spełniał.
+
+### Zmiana
+- **Nowa funkcja `completeWithTool<T>()`** w [lib/ai/anthropic.ts](lib/ai/anthropic.ts) — wywołuje Anthropic Messages API z `tools` + `tool_choice: { type: "tool", name, disable_parallel_tool_use: true }`. Wymusza na modelu zwrot pojedynczego tool call, którego `input` jest już sparsowany jako obiekt przez API — `JSON.parse` po naszej stronie znika. Zachowuje prompt caching (cache_control na system prompt). Wrapper trackAICall pozostaje bez zmian (sygnatura `{ result, usage }` identyczna).
+- **6 callsite'ów zmigrowanych** na `completeWithTool` z lokalnymi `ToolDefinition` (JSON schema obok zod schemy — zod nadal waliduje belt-and-suspenders):
+  - [lib/processing/generate-items.ts](lib/processing/generate-items.ts) — `submit_cloze_cards`, `submit_open_questions`
+  - [lib/processing/compress-and-tag.ts](lib/processing/compress-and-tag.ts) — `submit_tags` (`compressMaterial` zostawione na `complete()`, bo zwraca czysty tekst)
+  - [lib/ai/validate-open.ts](lib/ai/validate-open.ts) — `submit_validation`
+  - [lib/ai/detect-gaps.ts](lib/ai/detect-gaps.ts) — `submit_ranked_gaps`
+  - [lib/ai/generate-audit.ts](lib/ai/generate-audit.ts) — `submit_audit_questions`
+- **Usunięty** `lib/ai/json.ts` (`parseAIJson` + 4 helpery do naprawy JSON-a) — zero importerów po migracji. Mniej kodu, mniej pułapek.
+
+### Walidacja
+- `npx tsc --noEmit` — clean.
+- `npx eslint` na 6 dotkniętych plikach — clean.
+- Nie uruchamiałem dev servera — fix jest po stronie serwera/pipeline'u, weryfikacja end-to-end wymaga re-importu materiału przez UI (`/materials/import` → "Spróbuj ponownie" lub świeży upload). Istniejące materiały i `items` w bazie nietknięte.
+
+### Decyzje samodzielne (warto wiedzieć)
+- **JSON schema wpisane ręcznie** zamiast użycia `zod-to-json-schema` — schematy są małe, dodanie nowej zależności nie jest tego warte. Zod nadal waliduje wynik (belt-and-suspenders na wypadek, gdyby kiedyś tool schema rozjechał się z zodem).
+- **Prompty pozostawione bez zmian** — zawierają instrukcje "JEDYNIE poprawny JSON, bez ozdób", które po przejściu na tool use są martwą sugestią. Nie szkodzą (model i tak ignoruje, bo `tool_choice` wymusza tool call), ale przy najbliższej okazji można je posprzątać.
+- **`generateClaudePrompt`** w `lib/ai/generate-claude-prompt.ts` zwraca tekst (nie JSON) i nie był ruszany.
+
+---
+
 ## 2026-05-09 — UI Redesign v3 wg `design_handoff/` (DONE), Phase 11 still PENDING
 
 Wszystkie 10 ekranów Learning Loop przepisane na nowy design (warm editorial v3). Build green przez całą drogę. Logika biznesowa, kontrakty API i schemat DB nietknięte.

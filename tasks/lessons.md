@@ -2,6 +2,13 @@
 
 Project-specific gotchas. For universal patterns see `../../global-lessons.md`.
 
+## AI structured output
+
+- **Anthropic Messages API + zwykły tekst + `JSON.parse` = bomba zegarowa.** Pipeline miał 6 takich callsite'ów; każdy działał ~99% razy. Model raz na N prób zwracał JSON z nieescape'owanym `"` w stringu (np. w `answer_reference` z cytatem), parser padał z `Expected ',' or '}' after property value` i błąd lądował w UI ("Coś poszło nie tak" na `/materials/import`). Cztery warianty naprawy w `parseAIJson` (markdown fence strip, control chars escape, trailing comma strip) nie łapały wszystkich przypadków. Lekcja: dla strukturalnego output ZAWSZE używaj tool use API (`tools` + `tool_choice: { type: "tool", name }`), nie tekst + `JSON.parse`. Tool's `input` jest sparsowany przez API i Anthropic gwarantuje zgodność ze schemą.
+- **Wzorzec w tym projekcie:** `completeWithTool<T>()` w `lib/ai/anthropic.ts`. Po stronie callsite'a: lokalny `ToolDefinition` z `inputSchema` (ręczny JSON schema), wynik validowany jeszcze raz przez zod (belt-and-suspenders na wypadek rozjazdu schema↔zod). Wraperka zachowuje prompt caching i wraca w sygnaturze `{ result, usage }` zgodnej z `trackAICall`.
+- **`disable_parallel_tool_use: true`** w `tool_choice` — defensywnie, żeby model nie wpadł na pomysł zwrócenia kilku wywołań jednego toola. Z `type: "tool"` i konkretną nazwą powinien zwrócić jeden, ale taniej zablokować niż później chwytać edge case.
+- **Prompty instruujące "zwróć JSON, bez markdown, bez ```"** stają się martwym kodem przy tool use — model i tak nie generuje wolnego tekstu, gdy `tool_choice` wymusza tool call. Zostawiamy je na razie (nie szkodzą, ale są bezużyteczne). Przy następnym dotyku promptu — usunąć.
+
 ## M3 Phase 10 — Reading Room reskin
 
 - **Tokens martwe to nie tokens.** W Phase 1 zdefiniowaliśmy semantyczną paletę (`--bg-canvas`, `--accent`, etc.) ale grep przez kod zwracał 0 użyć — wszystko siedziało w `bg-zinc-50 dark:bg-black`. Phase 10 zaczynała się od podpięcia `@theme inline` w Tailwind v4, dopiero wtedy `bg-canvas` itp. działały jako natywne utility. Lekcja: jeśli definiujesz tokens, w tej samej fazie podepnij je do warstwy stylowania i zmigruj choć jeden plik na nie — inaczej rosną osobno od kodu.

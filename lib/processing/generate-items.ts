@@ -4,8 +4,7 @@
  */
 
 import { z } from "zod";
-import { complete } from "@/lib/ai/anthropic";
-import { parseAIJson } from "@/lib/ai/json";
+import { completeWithTool, type ToolDefinition } from "@/lib/ai/anthropic";
 import { GENERATE_CLOZE_SYSTEM_PROMPT } from "@/lib/ai/prompts/generate-cloze";
 import { GENERATE_OPEN_SYSTEM_PROMPT } from "@/lib/ai/prompts/generate-open";
 import { DEEP_DIVE_ROUND_SIZE } from "@/lib/sessions/deep-dive";
@@ -21,6 +20,31 @@ const ClozeBatchSchema = z.object({
   cards: z.array(ClozeCardSchema).min(1).max(50),
 });
 
+const SUBMIT_CLOZE_TOOL: ToolDefinition = {
+  name: "submit_cloze_cards",
+  description: "Submit the generated cloze flashcards once the batch is ready.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      cards: {
+        type: "array",
+        minItems: 1,
+        maxItems: 50,
+        items: {
+          type: "object",
+          properties: {
+            front: { type: "string", minLength: 1, description: "Full sentence with exactly one {{c1::answer}} cloze marker." },
+            answer: { type: "string", minLength: 1, description: "The text hidden inside {{c1::...}}." },
+            difficulty: { type: "string", enum: ["easy", "medium", "hard"] },
+          },
+          required: ["front", "answer", "difficulty"],
+        },
+      },
+    },
+    required: ["cards"],
+  },
+};
+
 const OpenQuestionSchema = z.object({
   question: z.string().min(5),
   answer_reference: z.string().min(20),
@@ -30,6 +54,31 @@ const OpenQuestionSchema = z.object({
 const OpenBatchSchema = z.object({
   questions: z.array(OpenQuestionSchema).min(1).max(12),
 });
+
+const SUBMIT_OPEN_TOOL: ToolDefinition = {
+  name: "submit_open_questions",
+  description: "Submit the generated open-ended Deep Dive questions.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      questions: {
+        type: "array",
+        minItems: 1,
+        maxItems: 12,
+        items: {
+          type: "object",
+          properties: {
+            question: { type: "string", minLength: 5 },
+            answer_reference: { type: "string", minLength: 20, description: "Reference answer (3-6 sentences) used by AI validator." },
+            difficulty: { type: "string", enum: ["easy", "medium", "hard"] },
+          },
+          required: ["question", "answer_reference", "difficulty"],
+        },
+      },
+    },
+    required: ["questions"],
+  },
+};
 
 export type ClozeCard = z.infer<typeof ClozeCardSchema>;
 export type OpenQuestion = z.infer<typeof OpenQuestionSchema>;
@@ -74,17 +123,17 @@ export interface GenerateClozeResult {
 }
 
 export async function generateClozeCards(compressedContent: string): Promise<GenerateClozeResult> {
-  const out = await complete({
+  const out = await completeWithTool({
     model: "claude-sonnet-4-6",
     systemPrompt: GENERATE_CLOZE_SYSTEM_PROMPT,
     userMessage: `Materiał:\n\n${compressedContent}`,
     maxTokens: 4000,
     temperature: 0.7,
     cacheSystemPrompt: true,
+    tool: SUBMIT_CLOZE_TOOL,
   });
 
-  const parsed = parseAIJson(out.text);
-  const validated = ClozeBatchSchema.parse(parsed);
+  const validated = ClozeBatchSchema.parse(out.data);
   return { cards: filterLowValueClozeCards(validated.cards), usage: out.usage };
 }
 
@@ -94,17 +143,17 @@ export interface GenerateOpenResult {
 }
 
 export async function generateOpenQuestions(compressedContent: string): Promise<GenerateOpenResult> {
-  const out = await complete({
+  const out = await completeWithTool({
     model: "claude-haiku-4-5",
     systemPrompt: GENERATE_OPEN_SYSTEM_PROMPT,
     userMessage: `Materiał:\n\n${compressedContent}`,
     maxTokens: 3000,
     temperature: 0.7,
     cacheSystemPrompt: true,
+    tool: SUBMIT_OPEN_TOOL,
   });
 
-  const parsed = parseAIJson(out.text);
-  const validated = OpenBatchSchema.parse(parsed);
+  const validated = OpenBatchSchema.parse(out.data);
   return { questions: validated.questions.slice(0, DEEP_DIVE_ROUND_SIZE), usage: out.usage };
 }
 

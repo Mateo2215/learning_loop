@@ -4,7 +4,7 @@
  */
 
 import { z } from "zod";
-import { complete } from "./anthropic";
+import { completeWithTool, type ToolDefinition } from "./anthropic";
 import { buildValidateOpenSystemPrompt } from "./prompts/validate-open";
 import type { Category } from "@/lib/db/types";
 import type { TokenUsage } from "./pricing";
@@ -15,6 +15,21 @@ const ValidateOpenSchema = z.object({
   feedback_positive: z.string().default(""),
   feedback_negative: z.string().default(""),
 });
+
+const SUBMIT_VALIDATION_TOOL: ToolDefinition = {
+  name: "submit_validation",
+  description: "Submit the evaluation of the learner's open-ended answer.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      evaluation: { type: "string", enum: ["correct", "partially_correct", "incorrect"] },
+      score: { type: "integer", minimum: 1, maximum: 10 },
+      feedback_positive: { type: "string", description: "1-2 sentences on what the learner got right (empty string if nothing)." },
+      feedback_negative: { type: "string", description: "1-3 sentences on what was missing or wrong; cite specific terms from the reference." },
+    },
+    required: ["evaluation", "score", "feedback_positive", "feedback_negative"],
+  },
+};
 
 export type ValidateOpenResult = z.infer<typeof ValidateOpenSchema>;
 
@@ -41,7 +56,7 @@ export async function validateOpenAnswer(input: ValidateOpenInput): Promise<Vali
     `\nOdpowiedź uczącego się:\n${input.userAnswer}`,
   ].join("\n");
 
-  const out = await complete({
+  const out = await completeWithTool({
     model: "claude-sonnet-4-6",
     systemPrompt: buildValidateOpenSystemPrompt(
       input.category,
@@ -52,14 +67,9 @@ export async function validateOpenAnswer(input: ValidateOpenInput): Promise<Vali
     maxTokens: 600,
     temperature: 0.3,
     cacheSystemPrompt: true,
+    tool: SUBMIT_VALIDATION_TOOL,
   });
 
-  let s = out.text.trim();
-  if (s.startsWith("```")) s = s.replace(/^```(?:json)?\s*/, "").replace(/\s*```$/, "");
-  const firstBrace = s.indexOf("{");
-  const lastBrace = s.lastIndexOf("}");
-  if (firstBrace > 0 && lastBrace > firstBrace) s = s.slice(firstBrace, lastBrace + 1);
-
-  const parsed = ValidateOpenSchema.parse(JSON.parse(s));
+  const parsed = ValidateOpenSchema.parse(out.data);
   return { result: parsed, usage: out.usage };
 }

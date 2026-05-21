@@ -4,7 +4,7 @@
  */
 
 import { z } from "zod";
-import { complete } from "./anthropic";
+import { completeWithTool, type ToolDefinition } from "./anthropic";
 import { DETECT_GAPS_SYSTEM_PROMPT } from "./prompts/detect-gaps";
 import type { GapCandidate } from "@/lib/gaps/detector";
 import type { TokenUsage } from "./pricing";
@@ -26,6 +26,32 @@ const OutputSchema = z.object({
   gaps: z.array(RankedGapSchema).max(8),
 });
 
+const SUBMIT_GAPS_TOOL: ToolDefinition = {
+  name: "submit_ranked_gaps",
+  description: "Submit up to 8 ranked knowledge gaps with severity.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      gaps: {
+        type: "array",
+        maxItems: 8,
+        items: {
+          type: "object",
+          properties: {
+            gap_type: { type: "string", enum: ["low_correct_rate", "stale_topic", "rising_failures", "never_consolidated"] },
+            title: { type: "string", minLength: 3 },
+            severity: { type: "string", enum: ["low", "medium", "high"] },
+            affected_tags: { type: "array", items: { type: "string" } },
+            affected_materials: { type: "array", items: { type: "string", description: "Material UUID." } },
+          },
+          required: ["gap_type", "title", "severity", "affected_tags", "affected_materials"],
+        },
+      },
+    },
+    required: ["gaps"],
+  },
+};
+
 export type RankedGap = z.infer<typeof RankedGapSchema>;
 
 export interface DetectGapsResponse {
@@ -43,21 +69,16 @@ export async function rankGapCandidates(
     "Zwróć max 8 najistotniejszych w ustalonym formacie JSON.",
   ].join("\n");
 
-  const out = await complete({
+  const out = await completeWithTool({
     model: "claude-sonnet-4-6",
     systemPrompt: DETECT_GAPS_SYSTEM_PROMPT,
     userMessage,
     maxTokens: 1500,
     temperature: 0.4,
     cacheSystemPrompt: true,
+    tool: SUBMIT_GAPS_TOOL,
   });
 
-  let s = out.text.trim();
-  if (s.startsWith("```")) s = s.replace(/^```(?:json)?\s*/, "").replace(/\s*```$/, "");
-  const firstBrace = s.indexOf("{");
-  const lastBrace = s.lastIndexOf("}");
-  if (firstBrace > 0 && lastBrace > firstBrace) s = s.slice(firstBrace, lastBrace + 1);
-
-  const parsed = OutputSchema.parse(JSON.parse(s));
+  const parsed = OutputSchema.parse(out.data);
   return { result: parsed.gaps, usage: out.usage };
 }

@@ -4,7 +4,7 @@
  */
 
 import { z } from "zod";
-import { complete } from "./anthropic";
+import { completeWithTool, type ToolDefinition } from "./anthropic";
 import { buildGenerateAuditSystemPrompt } from "./prompts/generate-audit";
 import type { AuditTrigger, Category } from "@/lib/db/types";
 import type { TokenUsage } from "./pricing";
@@ -18,6 +18,31 @@ const QuestionSchema = z.object({
 const AuditOutputSchema = z.object({
   questions: z.array(QuestionSchema).min(3).max(6),
 });
+
+const SUBMIT_AUDIT_TOOL: ToolDefinition = {
+  name: "submit_audit_questions",
+  description: "Submit 3-6 fresh, non-duplicate audit questions for the material.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      questions: {
+        type: "array",
+        minItems: 3,
+        maxItems: 6,
+        items: {
+          type: "object",
+          properties: {
+            question: { type: "string", minLength: 5 },
+            answer_reference: { type: "string", minLength: 5 },
+            difficulty: { type: "string", enum: ["easy", "medium", "hard"] },
+          },
+          required: ["question", "answer_reference", "difficulty"],
+        },
+      },
+    },
+    required: ["questions"],
+  },
+};
 
 export type AuditQuestion = z.infer<typeof QuestionSchema>;
 
@@ -51,21 +76,16 @@ export async function generateAuditQuestions(
     "Wygeneruj 3–5 nowych pytań audytowych w formacie JSON.",
   ].join("\n");
 
-  const out = await complete({
+  const out = await completeWithTool({
     model: "claude-sonnet-4-6",
     systemPrompt: buildGenerateAuditSystemPrompt(input.category, input.trigger),
     userMessage,
     maxTokens: 1500,
     temperature: 0.7,
     cacheSystemPrompt: true,
+    tool: SUBMIT_AUDIT_TOOL,
   });
 
-  let s = out.text.trim();
-  if (s.startsWith("```")) s = s.replace(/^```(?:json)?\s*/, "").replace(/\s*```$/, "");
-  const firstBrace = s.indexOf("{");
-  const lastBrace = s.lastIndexOf("}");
-  if (firstBrace > 0 && lastBrace > firstBrace) s = s.slice(firstBrace, lastBrace + 1);
-
-  const parsed = AuditOutputSchema.parse(JSON.parse(s));
+  const parsed = AuditOutputSchema.parse(out.data);
   return { result: parsed.questions, usage: out.usage };
 }

@@ -4,8 +4,7 @@
  */
 
 import { z } from "zod";
-import { complete } from "@/lib/ai/anthropic";
-import { parseAIJson } from "@/lib/ai/json";
+import { complete, completeWithTool, type ToolDefinition } from "@/lib/ai/anthropic";
 import { COMPRESS_SYSTEM_PROMPT } from "@/lib/ai/prompts/compress";
 import { AUTO_TAG_SYSTEM_PROMPT } from "@/lib/ai/prompts/auto-tag";
 import type { TokenUsage } from "@/lib/ai/pricing";
@@ -31,21 +30,39 @@ const TagsSchema = z.object({
   tags: z.array(z.string().min(1).max(40)).min(2).max(7),
 });
 
+const SUBMIT_TAGS_TOOL: ToolDefinition = {
+  name: "submit_tags",
+  description: "Submit 3-5 unique tags describing the material.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      tags: {
+        type: "array",
+        minItems: 2,
+        maxItems: 7,
+        items: { type: "string", minLength: 1, maxLength: 40 },
+      },
+    },
+    required: ["tags"],
+  },
+};
+
 export interface AutoTagResult {
   tags: string[];
   usage: TokenUsage;
 }
 
 export async function autoTagMaterial(compressedContent: string): Promise<AutoTagResult> {
-  const out = await complete({
+  const out = await completeWithTool({
     model: "claude-haiku-4-5",
     systemPrompt: AUTO_TAG_SYSTEM_PROMPT,
     userMessage: `Materiał:\n\n${compressedContent}`,
     maxTokens: 200,
     temperature: 0.5,
     cacheSystemPrompt: true,
+    tool: SUBMIT_TAGS_TOOL,
   });
 
-  const parsed = TagsSchema.parse(parseAIJson(out.text));
+  const parsed = TagsSchema.parse(out.data);
   return { tags: Array.from(new Set(parsed.tags)), usage: out.usage };
 }
