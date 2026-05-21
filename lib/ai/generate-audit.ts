@@ -5,6 +5,7 @@
 
 import { z } from "zod";
 import { completeWithTool, type ToolDefinition } from "./anthropic";
+import { parseToolPayload } from "./tool-output";
 import { buildGenerateAuditSystemPrompt } from "./prompts/generate-audit";
 import type { AuditTrigger, Category } from "@/lib/db/types";
 import type { TokenUsage } from "./pricing";
@@ -86,6 +87,6 @@ export async function generateAuditQuestions(
     tool: SUBMIT_AUDIT_TOOL,
   });
 
-  const parsed = AuditOutputSchema.parse(out.data);
+  const parsed = parseToolPayload(out.data, AuditOutputSchema, "generateAuditQuestions");
   return { result: parsed.questions, usage: out.usage };
 }

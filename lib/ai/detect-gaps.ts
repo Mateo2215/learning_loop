@@ -5,6 +5,7 @@
 
 import { z } from "zod";
 import { completeWithTool, type ToolDefinition } from "./anthropic";
+import { parseToolPayload } from "./tool-output";
 import { DETECT_GAPS_SYSTEM_PROMPT } from "./prompts/detect-gaps";
 import type { GapCandidate } from "@/lib/gaps/detector";
 import type { TokenUsage } from "./pricing";
@@ -79,6 +80,6 @@ export async function rankGapCandidates(
     tool: SUBMIT_GAPS_TOOL,
   });
 
-  const parsed = OutputSchema.parse(out.data);
+  const parsed = parseToolPayload(out.data, OutputSchema, "rankGapCandidates");
   return { result: parsed.gaps, usage: out.usage };
 }

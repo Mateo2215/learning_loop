@@ -29,6 +29,9 @@ Import materiału wywalał się komunikatem `Expected ',' or '}' after property 
 - **Prompty pozostawione bez zmian** — zawierają instrukcje "JEDYNIE poprawny JSON, bez ozdób", które po przejściu na tool use są martwą sugestią. Nie szkodzą (model i tak ignoruje, bo `tool_choice` wymusza tool call), ale przy najbliższej okazji można je posprzątać.
 - **`generateClaudePrompt`** w `lib/ai/generate-claude-prompt.ts` zwraca tekst (nie JSON) i nie był ruszany.
 
+### Follow-up: defensywna walidacja tool payloadu
+Po migracji na tool use wyszedł drugi failure mode: Haiku 4.5 raz na ileś-tam razy zwraca pole `questions` zadeklarowane w schemacie jako `type: "array"` jako **stringified JSON** (cały array jako jeden string). Anthropic w docs przyznaje, że tool's input_schema jest mocną sugestią, nie sztywnym kontraktem. → Dodany [lib/ai/tool-output.ts](lib/ai/tool-output.ts) z `parseToolPayload<T>()`: po nieudanym `safeParse` patrzy w zod issues, dla każdego `invalid_type` z `expected: "array"|"object"` próbuje `JSON.parse` na odpowiednim polu i waliduje ponownie. Przy ostatecznej porażce loguje surowy payload (truncated do 2000 znaków) + zod issues do `console.error`. Wszystkie 6 callsite'ów (cloze/open/audit/tags/validate/gaps) zmigrowane na ten helper.
+
 ---
 
 ## 2026-05-09 — UI Redesign v3 wg `design_handoff/` (DONE), Phase 11 still PENDING

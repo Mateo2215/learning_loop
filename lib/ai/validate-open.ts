@@ -5,6 +5,7 @@
 
 import { z } from "zod";
 import { completeWithTool, type ToolDefinition } from "./anthropic";
+import { parseToolPayload } from "./tool-output";
 import { buildValidateOpenSystemPrompt } from "./prompts/validate-open";
 import type { Category } from "@/lib/db/types";
 import type { TokenUsage } from "./pricing";
@@ -70,6 +71,6 @@ export async function validateOpenAnswer(input: ValidateOpenInput): Promise<Vali
     tool: SUBMIT_VALIDATION_TOOL,
   });
 
-  const parsed = ValidateOpenSchema.parse(out.data);
+  const parsed = parseToolPayload(out.data, ValidateOpenSchema, "validateOpenAnswer");
   return { result: parsed, usage: out.usage };
 }

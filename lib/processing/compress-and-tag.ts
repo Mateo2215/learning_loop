@@ -5,6 +5,7 @@
 
 import { z } from "zod";
 import { complete, completeWithTool, type ToolDefinition } from "@/lib/ai/anthropic";
+import { parseToolPayload } from "@/lib/ai/tool-output";
 import { COMPRESS_SYSTEM_PROMPT } from "@/lib/ai/prompts/compress";
 import { AUTO_TAG_SYSTEM_PROMPT } from "@/lib/ai/prompts/auto-tag";
 import type { TokenUsage } from "@/lib/ai/pricing";
@@ -63,6 +64,6 @@ export async function autoTagMaterial(compressedContent: string): Promise<AutoTa
     tool: SUBMIT_TAGS_TOOL,
   });
 
-  const parsed = TagsSchema.parse(out.data);
+  const parsed = parseToolPayload(out.data, TagsSchema, "autoTagMaterial");
   return { tags: Array.from(new Set(parsed.tags)), usage: out.usage };
 }
