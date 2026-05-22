@@ -4,8 +4,8 @@
  */
 
 import { z } from "zod";
-import { completeWithTool, type ToolDefinition } from "@/lib/ai/anthropic";
-import { parseToolPayload } from "@/lib/ai/tool-output";
+import { type ToolDefinition } from "@/lib/ai/anthropic";
+import { completeWithToolValidated } from "@/lib/ai/tool-output";
 import { GENERATE_CLOZE_SYSTEM_PROMPT } from "@/lib/ai/prompts/generate-cloze";
 import { GENERATE_OPEN_SYSTEM_PROMPT } from "@/lib/ai/prompts/generate-open";
 import { DEEP_DIVE_ROUND_SIZE } from "@/lib/sessions/deep-dive";
@@ -124,7 +124,7 @@ export interface GenerateClozeResult {
 }
 
 export async function generateClozeCards(compressedContent: string): Promise<GenerateClozeResult> {
-  const out = await completeWithTool({
+  const out = await completeWithToolValidated({
     model: "claude-sonnet-4-6",
     systemPrompt: GENERATE_CLOZE_SYSTEM_PROMPT,
     userMessage: `Materiał:\n\n${compressedContent}`,
@@ -132,10 +132,11 @@ export async function generateClozeCards(compressedContent: string): Promise<Gen
     temperature: 0.7,
     cacheSystemPrompt: true,
     tool: SUBMIT_CLOZE_TOOL,
+    schema: ClozeBatchSchema,
+    context: "generateClozeCards",
   });
 
-  const validated = parseToolPayload(out.data, ClozeBatchSchema, "generateClozeCards");
-  return { cards: filterLowValueClozeCards(validated.cards), usage: out.usage };
+  return { cards: filterLowValueClozeCards(out.data.cards), usage: out.usage };
 }
 
 export interface GenerateOpenResult {
@@ -144,7 +145,7 @@ export interface GenerateOpenResult {
 }
 
 export async function generateOpenQuestions(compressedContent: string): Promise<GenerateOpenResult> {
-  const out = await completeWithTool({
+  const out = await completeWithToolValidated({
     model: "claude-haiku-4-5",
     systemPrompt: GENERATE_OPEN_SYSTEM_PROMPT,
     userMessage: `Materiał:\n\n${compressedContent}`,
@@ -152,10 +153,11 @@ export async function generateOpenQuestions(compressedContent: string): Promise<
     temperature: 0.7,
     cacheSystemPrompt: true,
     tool: SUBMIT_OPEN_TOOL,
+    schema: OpenBatchSchema,
+    context: "generateOpenQuestions",
   });
 
-  const validated = parseToolPayload(out.data, OpenBatchSchema, "generateOpenQuestions");
-  return { questions: validated.questions.slice(0, DEEP_DIVE_ROUND_SIZE), usage: out.usage };
+  return { questions: out.data.questions.slice(0, DEEP_DIVE_ROUND_SIZE), usage: out.usage };
 }
 
 function filterLowValueClozeCards(cards: ClozeCard[]): ClozeCard[] {

@@ -4,8 +4,8 @@
  */
 
 import { z } from "zod";
-import { complete, completeWithTool, type ToolDefinition } from "@/lib/ai/anthropic";
-import { parseToolPayload } from "@/lib/ai/tool-output";
+import { complete, type ToolDefinition } from "@/lib/ai/anthropic";
+import { completeWithToolValidated } from "@/lib/ai/tool-output";
 import { COMPRESS_SYSTEM_PROMPT } from "@/lib/ai/prompts/compress";
 import { AUTO_TAG_SYSTEM_PROMPT } from "@/lib/ai/prompts/auto-tag";
 import type { TokenUsage } from "@/lib/ai/pricing";
@@ -54,7 +54,7 @@ export interface AutoTagResult {
 }
 
 export async function autoTagMaterial(compressedContent: string): Promise<AutoTagResult> {
-  const out = await completeWithTool({
+  const out = await completeWithToolValidated({
     model: "claude-haiku-4-5",
     systemPrompt: AUTO_TAG_SYSTEM_PROMPT,
     userMessage: `Materiał:\n\n${compressedContent}`,
@@ -62,8 +62,9 @@ export async function autoTagMaterial(compressedContent: string): Promise<AutoTa
     temperature: 0.5,
     cacheSystemPrompt: true,
     tool: SUBMIT_TAGS_TOOL,
+    schema: TagsSchema,
+    context: "autoTagMaterial",
   });
 
-  const parsed = parseToolPayload(out.data, TagsSchema, "autoTagMaterial");
-  return { tags: Array.from(new Set(parsed.tags)), usage: out.usage };
+  return { tags: Array.from(new Set(out.data.tags)), usage: out.usage };
 }

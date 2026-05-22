@@ -4,8 +4,8 @@
  */
 
 import { z } from "zod";
-import { completeWithTool, type ToolDefinition } from "./anthropic";
-import { parseToolPayload } from "./tool-output";
+import { type ToolDefinition } from "./anthropic";
+import { completeWithToolValidated } from "./tool-output";
 import { buildGenerateAuditSystemPrompt } from "./prompts/generate-audit";
 import type { AuditTrigger, Category } from "@/lib/db/types";
 import type { TokenUsage } from "./pricing";
@@ -77,7 +77,7 @@ export async function generateAuditQuestions(
     "Wygeneruj 3–5 nowych pytań audytowych w formacie JSON.",
   ].join("\n");
 
-  const out = await completeWithTool({
+  const out = await completeWithToolValidated({
     model: "claude-sonnet-4-6",
     systemPrompt: buildGenerateAuditSystemPrompt(input.category, input.trigger),
     userMessage,
@@ -85,8 +85,9 @@ export async function generateAuditQuestions(
     temperature: 0.7,
     cacheSystemPrompt: true,
     tool: SUBMIT_AUDIT_TOOL,
+    schema: AuditOutputSchema,
+    context: "generateAuditQuestions",
   });
 
-  const parsed = parseToolPayload(out.data, AuditOutputSchema, "generateAuditQuestions");
-  return { result: parsed.questions, usage: out.usage };
+  return { result: out.data.questions, usage: out.usage };
 }

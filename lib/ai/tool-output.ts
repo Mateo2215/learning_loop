@@ -12,6 +12,61 @@
  */
 
 import { z } from "zod";
+import { completeWithTool, type ToolCompletionParams } from "./anthropic";
+import type { TokenUsage } from "./pricing";
+
+export interface ValidatedToolResult<T> {
+  data: T;
+  usage: TokenUsage;
+}
+
+const RETRY_CORRECTION = `**Korekta**: w poprzednim wywołaniu pole tablicowe lub obiektowe zostało zwrócone jako stringified JSON (tekst owinięty w cudzysłów), a nie jako natywna struktura. Wywołaj narzędzie PONOWNIE — wszystkie pola tablicowe i obiektowe muszą być natywnymi tablicami/obiektami w argumentach narzędzia, NIE jako tekst JSON.`;
+
+/**
+ * Calls completeWithTool, validates the tool payload against the given zod
+ * schema (with the recovery heuristics in parseToolPayload), and on failure
+ * retries the API call ONCE with a correction message appended to userMessage.
+ *
+ * Use this from any callsite that needs validated tool output. The retry
+ * doubles latency and token cost only on the failing branch — successful
+ * first attempts are unaffected. System-prompt cache is preserved across
+ * the retry (only userMessage changes).
+ */
+export async function completeWithToolValidated<T>(
+  params: ToolCompletionParams & { schema: z.ZodType<T>; context: string },
+): Promise<ValidatedToolResult<T>> {
+  const { schema, context, ...callParams } = params;
+
+  const first = await completeWithTool(callParams);
+  try {
+    const data = parseToolPayload(first.data, schema, context);
+    return { data, usage: first.usage };
+  } catch (firstErr) {
+    if (!(firstErr instanceof ToolPayloadValidationError)) throw firstErr;
+
+    console.warn(`[${context}] first attempt failed schema validation — retrying once with correction`);
+
+    const retry = await completeWithTool({
+      ...callParams,
+      userMessage: `${callParams.userMessage}\n\n${RETRY_CORRECTION}`,
+    });
+
+    const data = parseToolPayload(retry.data, schema, context);
+    return {
+      data,
+      usage: sumUsage(first.usage, retry.usage),
+    };
+  }
+}
+
+function sumUsage(a: TokenUsage, b: TokenUsage): TokenUsage {
+  return {
+    inputTokens: a.inputTokens + b.inputTokens,
+    outputTokens: a.outputTokens + b.outputTokens,
+    cachedInputTokens: (a.cachedInputTokens ?? 0) + (b.cachedInputTokens ?? 0),
+    cacheCreationTokens: (a.cacheCreationTokens ?? 0) + (b.cacheCreationTokens ?? 0),
+  };
+}
 
 export function parseToolPayload<T>(
   payload: unknown,

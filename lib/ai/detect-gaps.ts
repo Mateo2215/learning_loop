@@ -4,8 +4,8 @@
  */
 
 import { z } from "zod";
-import { completeWithTool, type ToolDefinition } from "./anthropic";
-import { parseToolPayload } from "./tool-output";
+import { type ToolDefinition } from "./anthropic";
+import { completeWithToolValidated } from "./tool-output";
 import { DETECT_GAPS_SYSTEM_PROMPT } from "./prompts/detect-gaps";
 import type { GapCandidate } from "@/lib/gaps/detector";
 import type { TokenUsage } from "./pricing";
@@ -70,7 +70,7 @@ export async function rankGapCandidates(
     "Zwróć max 8 najistotniejszych w ustalonym formacie JSON.",
   ].join("\n");
 
-  const out = await completeWithTool({
+  const out = await completeWithToolValidated({
     model: "claude-sonnet-4-6",
     systemPrompt: DETECT_GAPS_SYSTEM_PROMPT,
     userMessage,
@@ -78,8 +78,9 @@ export async function rankGapCandidates(
     temperature: 0.4,
     cacheSystemPrompt: true,
     tool: SUBMIT_GAPS_TOOL,
+    schema: OutputSchema,
+    context: "rankGapCandidates",
   });
 
-  const parsed = parseToolPayload(out.data, OutputSchema, "rankGapCandidates");
-  return { result: parsed.gaps, usage: out.usage };
+  return { result: out.data.gaps, usage: out.usage };
 }

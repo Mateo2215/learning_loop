@@ -4,8 +4,8 @@
  */
 
 import { z } from "zod";
-import { completeWithTool, type ToolDefinition } from "./anthropic";
-import { parseToolPayload } from "./tool-output";
+import { type ToolDefinition } from "./anthropic";
+import { completeWithToolValidated } from "./tool-output";
 import { buildValidateOpenSystemPrompt } from "./prompts/validate-open";
 import type { Category } from "@/lib/db/types";
 import type { TokenUsage } from "./pricing";
@@ -57,7 +57,7 @@ export async function validateOpenAnswer(input: ValidateOpenInput): Promise<Vali
     `\nOdpowiedź uczącego się:\n${input.userAnswer}`,
   ].join("\n");
 
-  const out = await completeWithTool({
+  const out = await completeWithToolValidated({
     model: "claude-sonnet-4-6",
     systemPrompt: buildValidateOpenSystemPrompt(
       input.category,
@@ -69,8 +69,9 @@ export async function validateOpenAnswer(input: ValidateOpenInput): Promise<Vali
     temperature: 0.3,
     cacheSystemPrompt: true,
     tool: SUBMIT_VALIDATION_TOOL,
+    schema: ValidateOpenSchema,
+    context: "validateOpenAnswer",
   });
 
-  const parsed = parseToolPayload(out.data, ValidateOpenSchema, "validateOpenAnswer");
-  return { result: parsed, usage: out.usage };
+  return { result: out.data, usage: out.usage };
 }
