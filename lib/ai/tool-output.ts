@@ -12,8 +12,13 @@
  */
 
 import { z } from "zod";
+import { jsonrepair } from "jsonrepair";
 import { completeWithTool, type ToolCompletionParams } from "./anthropic";
 import type { TokenUsage } from "./pricing";
+
+/** Defensive caps for the jsonrepair recovery strategy — see Security Audit. */
+const MAX_REPAIR_INPUT_BYTES = 64 * 1024;
+const MAX_REPAIR_OUTPUT_RATIO = 4;
 
 export interface ValidatedToolResult<T> {
   data: T;
@@ -135,6 +140,15 @@ export class ToolPayloadValidationError extends Error {
 /**
  * Tries to parse a string as JSON using progressively more forgiving strategies.
  * Returns the parsed value on success, undefined if all strategies fail.
+ *
+ * Strategies, in order:
+ *   1. plain JSON.parse
+ *   2. markdown-fence strip then JSON.parse
+ *   3. first {…} or […] bracket block then JSON.parse
+ *   4. jsonrepair (handles unescaped quotes, single quotes, missing commas, etc.)
+ *
+ * Each successful parse is run through stripProtoKeys to neutralise any
+ * prototype-pollution payloads the model might have produced.
  */
 function tryParseJsonLoose(s: string): unknown | undefined {
   const trimmed = s.trim();
@@ -150,12 +164,52 @@ function tryParseJsonLoose(s: string): unknown | undefined {
 
   for (const c of candidates) {
     try {
-      return JSON.parse(c);
+      return stripProtoKeys(JSON.parse(c));
     } catch {
       // try the next candidate
     }
   }
+
+  // Strategy 4 (last resort): jsonrepair handles unescaped quotes, missing
+  // commas, and other malformed-JSON shapes that the strict parser rejects.
+  // Guarded by size cap (no megabyte-scale repair attempts) and expansion
+  // ratio cap (refuse to use suspiciously-grown output).
+  const repairSource = extracted ?? fenceStripped ?? trimmed;
+  if (repairSource.length <= MAX_REPAIR_INPUT_BYTES) {
+    try {
+      const repaired = jsonrepair(repairSource);
+      if (repaired.length <= MAX_REPAIR_OUTPUT_RATIO * repairSource.length) {
+        const parsed = JSON.parse(repaired);
+        console.warn(
+          `[tool-output] payload recovered via jsonrepair (input_len=${repairSource.length}, output_len=${repaired.length})`,
+        );
+        return stripProtoKeys(parsed);
+      }
+    } catch {
+      // give up — caller will throw with raw payload preview
+    }
+  }
+
   return undefined;
+}
+
+/**
+ * Recursively removes prototype-pollution keys (`__proto__`, `constructor`,
+ * `prototype`) from any object the AI returned. JSON.parse keeps these as
+ * own properties on the resulting object, so an attacker crafting a material
+ * that nudges the model to emit such a key could otherwise reach downstream
+ * `Object.assign` / spread sites.
+ */
+function stripProtoKeys(value: unknown): unknown {
+  if (value === null || typeof value !== "object") return value;
+  if (Array.isArray(value)) return value.map(stripProtoKeys);
+
+  const cleaned: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+    if (k === "__proto__" || k === "constructor" || k === "prototype") continue;
+    cleaned[k] = stripProtoKeys(v);
+  }
+  return cleaned;
 }
 
 function extractFirstJsonBlock(s: string): string | undefined {
