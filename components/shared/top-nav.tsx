@@ -7,6 +7,7 @@ import { NavigationMenu as Nm } from "radix-ui";
 import { ThemeToggle } from "@/components/shared/theme-toggle";
 import { MobileNav } from "@/components/shared/mobile-nav";
 import { isSessionRunPath, isPathInside } from "@/lib/nav/paths";
+import { SESSION_NAV_ITEMS } from "@/lib/nav/session-items";
 import { cn } from "@/lib/utils";
 
 interface SubItem {
@@ -20,12 +21,12 @@ export interface TopNavProps {
   signOutAction: () => Promise<void>;
 }
 
-const SESSIONS_SUB: SubItem[] = [
-  { href: "/sessions/review", label: "Fiszki", description: "Powtórki spaced repetition" },
-  { href: "/sessions/deep-dive", label: "Deep Dive", description: "Pytania otwarte z walidacją AI" },
-  { href: "/sessions/audit", label: "Audyty", description: "Zaplanowane głębokie sprawdzenia" },
-  { href: "/gaps", label: "Luki wiedzy", description: "Co warto douczyć z Claude.ai" },
-];
+// Shared with the mobile bottom-sheet picker — single source of truth.
+const SESSIONS_SUB: SubItem[] = SESSION_NAV_ITEMS.map(({ href, label, description }) => ({
+  href,
+  label,
+  description,
+}));
 
 const MENU_SUB: SubItem[] = [
   { href: "/search", label: "Wyszukaj", description: "Pełnotekstowe + semantyczne" },
