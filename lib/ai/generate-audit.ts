@@ -17,19 +17,19 @@ const QuestionSchema = z.object({
 });
 
 const AuditOutputSchema = z.object({
-  questions: z.array(QuestionSchema).min(3).max(6),
+  questions: z.array(QuestionSchema).length(3),
 });
 
 const SUBMIT_AUDIT_TOOL: ToolDefinition = {
   name: "submit_audit_questions",
-  description: "Submit 3-6 fresh, non-duplicate audit questions for the material.",
+  description: "Submit exactly 3 fresh, non-duplicate audit questions for the material.",
   inputSchema: {
     type: "object",
     properties: {
       questions: {
         type: "array",
         minItems: 3,
-        maxItems: 6,
+        maxItems: 3,
         items: {
           type: "object",
           properties: {
@@ -74,7 +74,7 @@ export async function generateAuditQuestions(
     "Pytania, które uczący się już widział (NIE powielaj):",
     existing,
     "",
-    "Wygeneruj 3–5 nowych pytań audytowych w formacie JSON.",
+    "Wygeneruj dokładnie 3 nowe pytania audytowe w formacie JSON.",
   ].join("\n");
 
   const out = await completeWithToolValidated({

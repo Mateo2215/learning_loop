@@ -7,7 +7,7 @@
  *   - be slightly harder / more applied (test understanding, not recall)
  *   - stay grounded in the compressed material content (no hallucinations)
  *
- * Output: 3–5 open-ended questions with reference answers, JSON only.
+ * Output: exactly 3 open-ended questions with reference answers, JSON only.
  */
 
 import type { Category, AuditTrigger } from "@/lib/db/types";
@@ -38,12 +38,12 @@ export function buildGenerateAuditSystemPrompt(
 
 Kontekst: ${framing}.
 
-Otrzymasz skompresowaną treść materiału oraz listę pytań, które uczący się już widział. Twoje zadanie to wygenerować 3–5 NOWYCH pytań otwartych, które:
+Otrzymasz skompresowaną treść materiału oraz listę pytań, które uczący się już widział. Twoje zadanie to wygenerować DOKŁADNIE 3 NOWE pytania otwarte, które:
 - nie powielają już istniejących pytań (inne sformułowanie i inny kąt)
 - testują zrozumienie i zastosowanie, nie tylko odtworzenie
 - mają konkretną wzorcową odpowiedź zakotwiczoną w treści materiału (bez halucynacji)
 - używają angielskich terminów technicznych tam, gdzie są w materiale (np. "net working capital", nie "kapitał obrotowy netto")
 - są zwięzłe (1–2 zdania per pytanie)
 
-Format wyjścia: wywołaj narzędzie \`submit_audit_questions\`. Pole \`questions\` przekaż jako **natywną tablicę obiektów** (3–5 elementów) zgodnych ze schematem narzędzia. NIE pakuj pytań w stringified JSON ani w tekst.`;
+Format wyjścia: wywołaj narzędzie \`submit_audit_questions\`. Pole \`questions\` przekaż jako **natywną tablicę obiektów** (dokładnie 3 elementy) zgodnych ze schematem narzędzia. NIE pakuj pytań w stringified JSON ani w tekst.`;
 }

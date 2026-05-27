@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AnswerInput } from "@/components/sessions/answer-input";
+import { ScoreBadge } from "@/components/sessions/score-badge";
 import { startSession, type ActiveSessionInfo } from "@/lib/sessions/start-client";
 import { ActiveSessionPrompt } from "@/components/sessions/active-session-prompt";
 import { ScreenMessage } from "@/components/sessions/screen-message";
@@ -39,6 +40,7 @@ interface SessionStartResponse {
 interface AnswerResponse {
   review_id: string;
   evaluation: "correct" | "partially_correct" | "incorrect";
+  score: number;
   feedback_positive: string;
   feedback_negative: string;
 }
@@ -315,7 +317,10 @@ function FeedbackCard({
   return (
     <Card>
       <CardHeader>
-        <CardTitle className={`text-base ${cls}`}>{label}</CardTitle>
+        <div className="flex items-start justify-between gap-4">
+          <CardTitle className={`text-base ${cls}`}>{label}</CardTitle>
+          <ScoreBadge score={feedback.score} size="md" />
+        </div>
       </CardHeader>
       <CardContent className="space-y-3 text-sm">
         {feedback.feedback_positive && (
