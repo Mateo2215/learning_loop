@@ -55,6 +55,7 @@ export interface Material {
   imported_at: string;
   deleted_at: string | null;
   suggested_gap_id: string | null;
+  was_truncated: boolean;
   created_at: string;
   updated_at: string;
 }

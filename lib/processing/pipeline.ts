@@ -58,16 +58,23 @@ export async function processMaterial(ctx: PipelineContext): Promise<{ materialI
     const dedupCandidates = await findSimilarMaterials(supabase, embedding);
     await markJob(supabase, jobId, { progress: 20 });
 
-    // Step 5: compress (Haiku)
+    // Step 5: compress (Haiku). stop_reason="max_tokens" means the
+    // compressed output hit the cap and may be missing the tail of the
+    // source — track it so we can warn the user post-import.
     const compressedRes = await trackAICall({
       supabase,
       userId,
       operation: "compress_material",
       model: "claude-haiku-4-5",
       metadata: { jobId, source: "import_pipeline" },
-      call: () => compressMaterial(payload.raw_text).then((r) => ({ result: r.compressed, usage: r.usage })),
+      call: () =>
+        compressMaterial(payload.raw_text).then((r) => ({
+          result: { compressed: r.compressed, wasTruncated: r.wasTruncated },
+          usage: r.usage,
+        })),
     });
-    const compressed = compressedRes.result;
+    const compressed = compressedRes.result.compressed;
+    const wasTruncated = compressedRes.result.wasTruncated;
     await markJob(supabase, jobId, { progress: 30 });
 
     // Step 6: auto-tag (Haiku)
@@ -95,6 +102,7 @@ export async function processMaterial(ctx: PipelineContext): Promise<{ materialI
         tags,
         embedding,
         status: "processing",
+        was_truncated: wasTruncated,
       })
       .select("id")
       .single();
@@ -209,6 +217,7 @@ export async function processMaterial(ctx: PipelineContext): Promise<{ materialI
         material_id: materialId,
         cloze_count: clozeRows.length,
         open_count: openRows.length,
+        was_truncated: wasTruncated,
         tags,
         dedup_candidates: dedupCandidates.map((c) => ({
           id: c.id,

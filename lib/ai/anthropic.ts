@@ -35,6 +35,7 @@ export interface CompletionParams {
 export interface CompletionResult {
   text: string;
   usage: TokenUsage;
+  stopReason?: string;
 }
 
 /**
@@ -76,6 +77,7 @@ export async function complete(params: CompletionParams): Promise<CompletionResu
       cachedInputTokens: response.usage.cache_read_input_tokens ?? 0,
       cacheCreationTokens: response.usage.cache_creation_input_tokens ?? 0,
     },
+    stopReason: response.stop_reason ?? undefined,
   };
 }
 

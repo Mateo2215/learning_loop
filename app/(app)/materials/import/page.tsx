@@ -22,7 +22,12 @@ interface JobState {
   created_at?: string;
   updated_at?: string;
   error?: string | null;
-  result?: { material_id?: string; cloze_count?: number; open_count?: number } | null;
+  result?: {
+    material_id?: string;
+    cloze_count?: number;
+    open_count?: number;
+    was_truncated?: boolean;
+  } | null;
 }
 
 const INTERRUPTED_IMPORT_ERROR = "Import timed out or was interrupted before completion.";
@@ -118,12 +123,19 @@ export default function ImportPage() {
       setPhase("done");
       const cloze = data.result?.cloze_count ?? 0;
       const open = data.result?.open_count ?? 0;
-      toast.success("Materiał zaimportowany", {
-        description: `${cloze} fiszek + ${open} pytań otwartych.`,
-      });
+      const truncated = data.result?.was_truncated === true;
+      const base = `${cloze} fiszek + ${open} pytań otwartych.`;
+      if (truncated) {
+        toast.warning("Materiał zaimportowany — częściowo", {
+          description: `${base} ⚠ Plik był długi — Haiku pominął końcówkę źródła. Pytania mogą nie obejmować ostatnich fragmentów.`,
+          duration: 10000,
+        });
+      } else {
+        toast.success("Materiał zaimportowany", { description: base });
+      }
       const materialId = data.result?.material_id;
       if (materialId) {
-        setTimeout(() => router.push(`/materials/${materialId}`), 1200);
+        setTimeout(() => router.push(`/materials/${materialId}`), truncated ? 4000 : 1200);
       }
     } else if (data.status === "failed") {
       stopTracking();
@@ -300,6 +312,15 @@ export default function ImportPage() {
                 Przekierowuję…
               </CardDescription>
             </CardHeader>
+            {jobState?.result?.was_truncated && (
+              <CardContent>
+                <div className="rounded-md border border-warn/35 bg-warn/10 px-4 py-3 text-sm text-subtle">
+                  <strong className="text-warn">Materiał był długi.</strong> Haiku zatrzymał kompresję
+                  przy limicie tokenów — pytania mogą nie obejmować końcowych fragmentów źródła.
+                  Banner zostanie widoczny na karcie materiału.
+                </div>
+              </CardContent>
+            )}
           </Card>
         )}
 

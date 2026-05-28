@@ -6,6 +6,7 @@ import {
   FileText,
   Globe,
   FileEdit,
+  AlertTriangle,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { Chip } from "@/components/ui/chip";
@@ -140,6 +141,21 @@ export default async function MaterialDetailPage({
             materialId={m.id}
             gapTitle={suggestedGap.title ?? "Otwarta luka"}
           />
+        </div>
+      )}
+
+      {m.was_truncated && (
+        <div className="mb-6 rounded-lg border border-warn/35 bg-warn/10 px-5 py-3 flex items-start gap-3">
+          <AlertTriangle className="h-4 w-4 text-warn mt-0.5 shrink-0" />
+          <div>
+            <div className="font-mono text-[11px] uppercase tracking-[0.15em] text-warn mb-1">
+              Materiał skompresowany częściowo
+            </div>
+            <p className="text-[13px] text-subtle leading-relaxed">
+              Plik był długi — Haiku zatrzymał kompresję przy limicie tokenów.
+              Wygenerowane pytania i fiszki mogą nie obejmować końcowych fragmentów źródła.
+            </p>
+          </div>
         </div>
       )}
 

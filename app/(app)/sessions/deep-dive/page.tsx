@@ -1,12 +1,19 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { BookOpen, ArrowRight } from "lucide-react";
+import { BookOpen } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { Button } from "@/components/ui/button";
 import { Chip } from "@/components/ui/chip";
 import { SectionHeader } from "@/components/shared/section-header";
 import { CATEGORY_LABELS, type Category, type MaterialStatus } from "@/lib/db/types";
 import { DEEP_DIVE_ROUND_SIZE } from "@/lib/sessions/deep-dive";
+import { DeepDivePreview, type PreviewStats } from "@/components/sessions/deep-dive-preview";
+
+// Items with FSRS stability ≥ this many days count as "mastered". Matches
+// the `young`/`mature` threshold used by the MasteryBar on the material
+// detail page (computeSegments). Was previously `fsrs_review_count >= 3`,
+// which measured attempts rather than retention.
+const MASTERY_STABILITY_DAYS = 7;
 
 interface MaterialOption {
   id: string;
@@ -23,23 +30,7 @@ interface ActiveDeepDive {
   planned: number;
 }
 
-interface DeepDiveStats {
-  total_open: number;
-  due_today: number;
-  mastered: number;
-  total_reviews: number;
-  avg_score: number | null;
-  sample_size: number;
-  last_session_ended_at: string | null;
-  sparkline: number[];
-  last_review: {
-    question: string;
-    user_answer: string | null;
-    score: number | null;
-    ai_feedback_positive: string | null;
-    ai_feedback_negative: string | null;
-  } | null;
-}
+type DeepDiveStats = PreviewStats;
 
 export default async function DeepDiveSelectorPage({
   searchParams,
@@ -212,7 +203,11 @@ export default async function DeepDiveSelectorPage({
           </ul>
 
           {previewMaterial && previewStats ? (
-            <PreviewPanel material={previewMaterial} stats={previewStats} />
+            <DeepDivePreview
+              material={previewMaterial}
+              stats={previewStats}
+              roundSize={DEEP_DIVE_ROUND_SIZE}
+            />
           ) : (
             <div className="bg-surface border border-line rounded-2xl p-8 lg:min-h-[360px] flex flex-col items-center justify-center text-center gap-4">
               <div className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted">
@@ -230,140 +225,6 @@ export default async function DeepDiveSelectorPage({
   );
 }
 
-function PreviewPanel({
-  material,
-  stats,
-}: {
-  material: MaterialOption;
-  stats: DeepDiveStats;
-}) {
-  return (
-    <div className="bg-surface border border-line rounded-2xl p-8 flex flex-col gap-6">
-      <header>
-        <Chip variant="default" size="sm">
-          {CATEGORY_LABELS[material.category]}
-        </Chip>
-        <h2 className="font-serif text-[24px] tracking-[-0.01em] leading-tight mt-3 text-fg">
-          {material.title}
-        </h2>
-      </header>
-
-      <div className="grid grid-cols-2 gap-x-6 gap-y-5">
-        <StatBlock
-          label="Pytań otwartych"
-          value={`${stats.total_open}`}
-          sub={stats.due_today > 0 ? `${stats.due_today} due dzisiaj` : `${stats.mastered} opanowanych`}
-        />
-        <StatBlock
-          label="Średnia ocena AI"
-          value={stats.avg_score === null ? "—" : `${stats.avg_score.toFixed(1)}/10`}
-          sub={stats.sample_size > 0 ? `z ostatnich ${stats.sample_size}` : "brak danych"}
-        />
-        <StatBlock
-          label="Ostatnia sesja"
-          value={stats.last_session_ended_at ? formatRelative(stats.last_session_ended_at) : "—"}
-          sub={stats.last_session_ended_at ? "" : "jeszcze nie zaczynałeś"}
-        />
-        <StatBlock
-          label="Liczba powtórek"
-          value={`${stats.total_reviews}`}
-          sub={stats.total_reviews === 1 ? "1 odpowiedź" : `${stats.total_reviews} odpowiedzi`}
-        />
-      </div>
-
-      {stats.sparkline.length >= 2 && (
-        <div>
-          <div className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted mb-2">
-            Trend
-          </div>
-          <Sparkline values={stats.sparkline} />
-        </div>
-      )}
-
-      {stats.last_review && (
-        <details className="border-t border-line pt-4">
-          <summary className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted cursor-pointer hover:text-fg transition-colors">
-            Ostatnia odpowiedź
-            {stats.last_review.score !== null && (
-              <span className="ml-2 text-fg">· {stats.last_review.score}/10</span>
-            )}
-          </summary>
-          <div className="mt-3 space-y-2 text-[13px]">
-            <p className="text-fg">{stats.last_review.question}</p>
-            {stats.last_review.user_answer && (
-              <p className="text-subtle italic">„{stats.last_review.user_answer}"</p>
-            )}
-            {stats.last_review.ai_feedback_positive && (
-              <p className="text-muted">
-                <span className="text-accent">+ </span>
-                {stats.last_review.ai_feedback_positive}
-              </p>
-            )}
-            {stats.last_review.ai_feedback_negative && (
-              <p className="text-muted">
-                <span className="text-bad">− </span>
-                {stats.last_review.ai_feedback_negative}
-              </p>
-            )}
-          </div>
-        </details>
-      )}
-
-      <div className="flex items-center justify-end pt-2 border-t border-line">
-        <Button asChild className="min-h-10">
-          <Link href={`/sessions/deep-dive/${material.id}`}>
-            Powtórz materiał
-            <ArrowRight className="h-4 w-4 ml-1" />
-          </Link>
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-function StatBlock({ label, value, sub }: { label: string; value: string; sub?: string }) {
-  return (
-    <div>
-      <div className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted mb-1">
-        {label}
-      </div>
-      <div className="font-serif text-[24px] leading-none tracking-[-0.01em] text-fg">
-        {value}
-      </div>
-      {sub && <div className="font-mono text-[10px] text-muted mt-1">{sub}</div>}
-    </div>
-  );
-}
-
-function Sparkline({ values }: { values: number[] }) {
-  const w = 120;
-  const h = 30;
-  const max = Math.max(...values, 1);
-  const min = Math.min(...values, 0);
-  const range = Math.max(max - min, 0.001);
-  const stepX = values.length > 1 ? w / (values.length - 1) : 0;
-  const points = values
-    .map((v, i) => {
-      const x = i * stepX;
-      const y = h - ((v - min) / range) * h;
-      return `${x.toFixed(1)},${y.toFixed(1)}`;
-    })
-    .join(" ");
-
-  return (
-    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} className="text-accent">
-      <polyline
-        points={points}
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
 async function fetchDeepDiveStats(
   supabase: Awaited<ReturnType<typeof createClient>>,
   userId: string,
@@ -373,7 +234,7 @@ async function fetchDeepDiveStats(
 
   const { data: openItemsRaw } = await supabase
     .from("items")
-    .select("id, question, fsrs_due_date, fsrs_review_count")
+    .select("id, question, fsrs_due_date, fsrs_stability")
     .eq("user_id", userId)
     .eq("material_id", materialId)
     .eq("type", "open")
@@ -383,13 +244,13 @@ async function fetchDeepDiveStats(
     id: string;
     question: string;
     fsrs_due_date: string | null;
-    fsrs_review_count: number | null;
+    fsrs_stability: number | null;
   }[];
   const openItemIds = items.map((i) => i.id);
 
   const totalOpen = items.length;
   const dueToday = items.filter((i) => i.fsrs_due_date && i.fsrs_due_date <= nowIso).length;
-  const mastered = items.filter((i) => (i.fsrs_review_count ?? 0) >= 3).length;
+  const mastered = items.filter((i) => (i.fsrs_stability ?? 0) >= MASTERY_STABILITY_DAYS).length;
   const questionById = new Map(items.map((i) => [i.id, i.question]));
 
   if (openItemIds.length === 0) {
@@ -486,18 +347,4 @@ async function fetchDeepDiveStats(
     sparkline,
     last_review: lastReview,
   };
-}
-
-function formatRelative(iso: string): string {
-  const diff = Date.now() - new Date(iso).getTime();
-  const minutes = Math.floor(diff / 60_000);
-  if (minutes < 60) return minutes <= 1 ? "przed chwilą" : `${minutes} min temu`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours} ${hours === 1 ? "godz." : "godz."} temu`;
-  const days = Math.floor(hours / 24);
-  if (days < 7) return `${days} ${days === 1 ? "dzień" : "dni"} temu`;
-  const weeks = Math.floor(days / 7);
-  if (weeks < 5) return `${weeks} ${weeks === 1 ? "tydz." : "tyg."} temu`;
-  const months = Math.floor(days / 30);
-  return `${months} ${months === 1 ? "mies." : "mies."} temu`;
 }

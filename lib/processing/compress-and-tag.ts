@@ -13,6 +13,7 @@ import type { TokenUsage } from "@/lib/ai/pricing";
 export interface CompressResult {
   compressed: string;
   usage: TokenUsage;
+  wasTruncated: boolean;
 }
 
 export async function compressMaterial(rawText: string): Promise<CompressResult> {
@@ -20,11 +21,15 @@ export async function compressMaterial(rawText: string): Promise<CompressResult>
     model: "claude-haiku-4-5",
     systemPrompt: COMPRESS_SYSTEM_PROMPT,
     userMessage: `Tekst do skompresowania:\n\n${rawText}`,
-    maxTokens: Math.min(4000, Math.ceil(rawText.length / 3)),
+    maxTokens: Math.min(6000, Math.ceil(rawText.length / 3)),
     temperature: 0.2,
     cacheSystemPrompt: true,
   });
-  return { compressed: out.text.trim(), usage: out.usage };
+  return {
+    compressed: out.text.trim(),
+    usage: out.usage,
+    wasTruncated: out.stopReason === "max_tokens",
+  };
 }
 
 const TagsSchema = z.object({
