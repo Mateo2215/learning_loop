@@ -31,6 +31,8 @@ export interface StartSessionInput {
   bypass_new_limit?: boolean;
   /** Deep Dive only: prioritize these item ids. */
   focus_item_ids?: string[];
+  /** Deep Dive only: bypass mastery filter, include mastered items in the queue. */
+  force_replay?: boolean;
 }
 
 function detectDevice(): "desktop" | "mobile" {

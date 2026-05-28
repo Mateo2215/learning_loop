@@ -14,10 +14,20 @@ export interface PreviewMaterial {
   open_count: number;
 }
 
+export type PreviewSectionStatus =
+  | "fresh"
+  | "in_progress"
+  | "needs_followup"
+  | "done"
+  | "below_threshold";
+
 export interface PreviewStats {
   total_open: number;
-  due_today: number;
   mastered: number;
+  weak_count: number;
+  leech_count: number;
+  section_status: PreviewSectionStatus;
+  section_avg: number | null;
   total_reviews: number;
   avg_score: number | null;
   sample_size: number;
@@ -51,8 +61,11 @@ export function DeepDivePreview({
     }
   }, [material.id]);
 
-  const roundCount = Math.min(material.open_count, roundSize);
-  const masteryState = getMasteryState(stats);
+  // Liczba pytań w następnej rundzie = liczba weak + fresh (mastered pomijane).
+  // Dla `done` sekcji to 0 — user zobaczy CTA "Powtórz wszystko".
+  const isDone = stats.section_status === "done";
+  const queueSize = stats.weak_count + (stats.total_open - stats.mastered - stats.weak_count);
+  const roundCount = isDone ? Math.min(stats.total_open, roundSize) : Math.min(queueSize, roundSize);
 
   return (
     <div
@@ -80,15 +93,17 @@ export function DeepDivePreview({
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
         <ScoreHero
-          score={stats.avg_score}
+          sectionAvg={stats.section_avg}
           sparkline={stats.sparkline}
-          sampleSize={stats.sample_size}
+          totalOpen={stats.total_open}
+          scoredCount={stats.mastered + stats.weak_count}
         />
         <MasteryHero
-          state={masteryState}
+          sectionStatus={stats.section_status}
           mastered={stats.mastered}
           total={stats.total_open}
-          dueToday={stats.due_today}
+          weakCount={stats.weak_count}
+          leechCount={stats.leech_count}
           lastSessionEndedAt={stats.last_session_ended_at}
         />
       </div>
@@ -139,8 +154,16 @@ export function DeepDivePreview({
           asChild
           className="w-full sm:w-auto h-12 sm:h-11 text-[14px] font-medium"
         >
-          <Link href={`/sessions/deep-dive/${material.id}`}>
-            Zacznij rundę {roundCount} {pluralQuestions(roundCount)}
+          <Link
+            href={
+              isDone
+                ? `/sessions/deep-dive/${material.id}?force_replay=true`
+                : `/sessions/deep-dive/${material.id}`
+            }
+          >
+            {isDone
+              ? `Powtórz wszystko (${roundCount})`
+              : `Zacznij rundę ${roundCount} ${pluralQuestions(roundCount)}`}
             <ArrowRight className="h-4 w-4 ml-1.5" />
           </Link>
         </Button>
@@ -149,44 +172,35 @@ export function DeepDivePreview({
   );
 }
 
-type MasteryState =
-  | { kind: "fresh" }
-  | { kind: "due"; dueToday: number }
-  | { kind: "normal" };
-
-function getMasteryState(stats: PreviewStats): MasteryState {
-  if (stats.total_reviews === 0) return { kind: "fresh" };
-  if (stats.due_today > 0) return { kind: "due", dueToday: stats.due_today };
-  return { kind: "normal" };
-}
-
 function ScoreHero({
-  score,
+  sectionAvg,
   sparkline,
-  sampleSize,
+  totalOpen,
+  scoredCount,
 }: {
-  score: number | null;
+  sectionAvg: number | null;
   sparkline: number[];
-  sampleSize: number;
+  totalOpen: number;
+  scoredCount: number;
 }) {
   return (
     <div>
       <div className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted mb-2">
-        Średnia ocena AI
+        Średnia sekcji
       </div>
-      {score === null ? (
+      {sectionAvg === null ? (
         <>
           <div className="font-serif text-[40px] leading-none tracking-[-0.02em] text-muted">
             —
           </div>
           <div className="mt-3 h-[28px]" />
-          <div className="font-mono text-[11px] text-muted mt-2">brak danych</div>
+          <div className="font-mono text-[11px] text-muted mt-2">brak ocen</div>
         </>
       ) : (
         <>
           <div className="flex items-baseline gap-1">
             <span className="font-serif text-[40px] leading-none tracking-[-0.02em] text-fg">
-              {score.toFixed(1)}
+              {sectionAvg.toFixed(1)}
             </span>
             <span className="font-serif text-[18px] text-muted">/10</span>
           </div>
@@ -201,7 +215,7 @@ function ScoreHero({
             <div className="mt-3 h-[28px]" />
           )}
           <div className="font-mono text-[11px] text-muted mt-2">
-            średnia z {sampleSize} {sampleSize === 1 ? "odpowiedzi" : "odpowiedzi"}
+            z {scoredCount}/{totalOpen} {totalOpen === 1 ? "pytania" : "pytań"}
           </div>
         </>
       )}
@@ -210,23 +224,27 @@ function ScoreHero({
 }
 
 function MasteryHero({
-  state,
+  sectionStatus,
   mastered,
   total,
-  dueToday,
+  weakCount,
+  leechCount,
   lastSessionEndedAt,
 }: {
-  state: MasteryState;
+  sectionStatus: PreviewSectionStatus;
   mastered: number;
   total: number;
-  dueToday: number;
+  weakCount: number;
+  leechCount: number;
   lastSessionEndedAt: string | null;
 }) {
   const lastLabel = lastSessionEndedAt
     ? `Ostatnio: ${formatRelative(lastSessionEndedAt)}`
     : "Jeszcze nie zaczynałeś";
 
-  if (state.kind === "fresh") {
+  const leechSuffix = leechCount > 0 ? ` · 🐌 ${leechCount} trudnych` : "";
+
+  if (sectionStatus === "fresh") {
     return (
       <div>
         <div className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted mb-2">
@@ -241,26 +259,66 @@ function MasteryHero({
     );
   }
 
-  if (state.kind === "due") {
+  if (sectionStatus === "needs_followup") {
     return (
       <div>
         <div className="font-mono text-[10px] uppercase tracking-[0.15em] text-warn mb-2">
-          Do powtórki
+          Do dorobienia
         </div>
         <div className="flex items-baseline gap-2">
           <span className="font-serif text-[40px] leading-none tracking-[-0.02em] text-warn">
-            {dueToday}
+            {weakCount}
           </span>
           <span className="font-mono text-[11px] uppercase tracking-wide text-warn">
-            due dzisiaj
+            słabe (score ≤6)
           </span>
         </div>
         <ProgressBar mastered={mastered} total={total} />
-        <div className="font-mono text-[11px] text-muted mt-2">{lastLabel}</div>
+        <div className="font-mono text-[11px] text-muted mt-2">
+          {lastLabel}
+          {leechSuffix}
+        </div>
       </div>
     );
   }
 
+  if (sectionStatus === "done") {
+    return (
+      <div>
+        <div className="font-mono text-[10px] uppercase tracking-[0.15em] text-ok mb-2">
+          Status
+        </div>
+        <div className="font-serif text-[24px] leading-tight tracking-[-0.01em] text-fg">
+          ✓ Zaliczone
+        </div>
+        <ProgressBar mastered={total} total={total} />
+        <div className="font-mono text-[11px] text-muted mt-2">
+          {lastLabel}
+          {leechSuffix}
+        </div>
+      </div>
+    );
+  }
+
+  if (sectionStatus === "below_threshold") {
+    return (
+      <div>
+        <div className="font-mono text-[10px] uppercase tracking-[0.15em] text-warn mb-2">
+          Poniżej progu
+        </div>
+        <div className="font-serif text-[24px] leading-tight tracking-[-0.01em] text-fg">
+          średnia &lt; 7
+        </div>
+        <ProgressBar mastered={mastered} total={total} />
+        <div className="font-mono text-[11px] text-muted mt-2">
+          {lastLabel}
+          {leechSuffix}
+        </div>
+      </div>
+    );
+  }
+
+  // sectionStatus === "in_progress"
   return (
     <div>
       <div className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted mb-2">
@@ -273,13 +331,16 @@ function MasteryHero({
         <span className="font-serif text-[18px] text-muted">/{total}</span>
         <span
           className="ml-2 font-mono text-[11px] uppercase tracking-wide text-subtle underline decoration-dotted underline-offset-2 cursor-help"
-          title="Pytanie uznane za opanowane gdy FSRS stability ≥ 7 dni — system szacuje że zapamiętasz je co najmniej tydzień."
+          title="Pytanie opanowane = ostatni score AI ≥ 7. Słabe = ≤6, wraca do powtórki."
         >
           opanowane
         </span>
       </div>
       <ProgressBar mastered={mastered} total={total} />
-      <div className="font-mono text-[11px] text-muted mt-2">{lastLabel}</div>
+      <div className="font-mono text-[11px] text-muted mt-2">
+        {lastLabel}
+        {leechSuffix}
+      </div>
     </div>
   );
 }

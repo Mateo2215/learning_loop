@@ -211,6 +211,12 @@ export async function detectRisingFailures(
 /**
  * Items reviewed 4+ times that have never reached 3 consecutive "good or
  * better" ratings (cloze) or 3 consecutive "correct" (open). They're stuck.
+ *
+ * Open items also get flagged when `is_leech = true` — set by the answer
+ * route after 3 consecutive open reviews with score ≤ 6 (see
+ * `shouldUpdateLeech` in lib/sessions/section-status.ts). This bypasses
+ * the fsrs_review_count check for open items, since FSRS isn't updated
+ * for them.
  */
 export async function detectNeverConsolidated(
   supabase: SupabaseClient,
@@ -218,9 +224,9 @@ export async function detectNeverConsolidated(
 ): Promise<GapCandidate[]> {
   const { data: items } = await supabase
     .from("items")
-    .select("id, fsrs_review_count, tags, material_id, materials!inner(title)")
+    .select("id, fsrs_review_count, tags, material_id, is_leech, materials!inner(title)")
     .eq("user_id", userId)
-    .gte("fsrs_review_count", NEVER_CONSOLIDATED_MIN_REVIEWS)
+    .or(`fsrs_review_count.gte.${NEVER_CONSOLIDATED_MIN_REVIEWS},is_leech.eq.true`)
     .is("audit_id", null);
 
   if (!items || items.length === 0) return [];
@@ -230,6 +236,7 @@ export async function detectNeverConsolidated(
     fsrs_review_count: number;
     tags: string[] | null;
     material_id: string;
+    is_leech: boolean | null;
     materials: { title: string } | { title: string }[];
   };
 

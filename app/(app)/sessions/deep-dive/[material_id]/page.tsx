@@ -52,6 +52,7 @@ export default function DeepDivePage({ params }: { params: Promise<{ material_id
   const router = useRouter();
   const searchParams = useSearchParams();
   const focusItemId = searchParams.get("focus");
+  const forceReplay = searchParams.get("force_replay") === "true";
 
   const [phase, setPhase] = useState<Phase>("loading");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -74,6 +75,7 @@ export default function DeepDivePage({ params }: { params: Promise<{ material_id
       item_count: DEEP_DIVE_ROUND_SIZE,
       force,
       focus_item_ids: focusItemId ? [focusItemId] : undefined,
+      force_replay: forceReplay,
     });
     if (result.kind === "conflict") {
       setActiveConflict(result.active);
@@ -100,7 +102,7 @@ export default function DeepDivePage({ params }: { params: Promise<{ material_id
     setCalibrationPicked(null);
     setQuestionShownAt(Date.now());
     setPhase(data.items.length === 0 ? "empty" : "answering");
-  }, [material_id, focusItemId]);
+  }, [material_id, focusItemId, forceReplay]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {

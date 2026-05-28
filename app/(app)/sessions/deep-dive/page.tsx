@@ -7,13 +7,20 @@ import { Chip } from "@/components/ui/chip";
 import { SectionHeader } from "@/components/shared/section-header";
 import { CATEGORY_LABELS, type Category, type MaterialStatus } from "@/lib/db/types";
 import { DEEP_DIVE_ROUND_SIZE } from "@/lib/sessions/deep-dive";
+import {
+  computeSectionStatus,
+  type SectionStats,
+  type SectionStatus,
+} from "@/lib/sessions/section-status";
 import { DeepDivePreview, type PreviewStats } from "@/components/sessions/deep-dive-preview";
 
-// Items with FSRS stability ≥ this many days count as "mastered". Matches
-// the `young`/`mature` threshold used by the MasteryBar on the material
-// detail page (computeSegments). Was previously `fsrs_review_count >= 3`,
-// which measured attempts rather than retention.
-const MASTERY_STABILITY_DAYS = 7;
+// Statusy które widać w domyślnym selektorze (bez toggle "Pokaż ukończone").
+const ACTIVE_STATUSES = new Set<SectionStatus>([
+  "fresh",
+  "in_progress",
+  "needs_followup",
+  "below_threshold",
+]);
 
 interface MaterialOption {
   id: string;
@@ -21,6 +28,8 @@ interface MaterialOption {
   category: Category;
   status: MaterialStatus;
   open_count: number;
+  section: SectionStats;
+  leech_count: number;
 }
 
 interface ActiveDeepDive {
@@ -35,7 +44,7 @@ type DeepDiveStats = PreviewStats;
 export default async function DeepDiveSelectorPage({
   searchParams,
 }: {
-  searchParams: Promise<{ preview?: string }>;
+  searchParams: Promise<{ preview?: string; show_done?: string }>;
 }) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -43,6 +52,7 @@ export default async function DeepDiveSelectorPage({
 
   const params = await searchParams;
   const previewId = params.preview ?? null;
+  const showDone = params.show_done === "1";
 
   const { data: materials } = await supabase
     .from("materials")
@@ -53,24 +63,26 @@ export default async function DeepDiveSelectorPage({
 
   const materialList = (materials ?? []) as Pick<MaterialOption, "id" | "title" | "category" | "status">[];
 
-  const counts = new Map<string, number>();
-  if (materialList.length > 0) {
-    const ids = materialList.map((m) => m.id);
-    const { data: items } = await supabase
-      .from("items")
-      .select("material_id")
-      .eq("type", "open")
-      .in("material_id", ids);
+  const materialIds = materialList.map((m) => m.id);
+  const sectionsByMaterial = await loadSectionStatsForMaterials(supabase, user.id, materialIds);
 
-    for (const row of items ?? []) {
-      const id = (row as { material_id: string }).material_id;
-      counts.set(id, (counts.get(id) ?? 0) + 1);
-    }
-  }
-
-  const enriched: MaterialOption[] = materialList
-    .map((m) => ({ ...m, open_count: counts.get(m.id) ?? 0 }))
+  const enrichedAll: MaterialOption[] = materialList
+    .map((m) => {
+      const entry = sectionsByMaterial.get(m.id);
+      return {
+        ...m,
+        open_count: entry?.section.total ?? 0,
+        section: entry?.section ?? computeSectionStatus([]),
+        leech_count: entry?.leech_count ?? 0,
+      };
+    })
     .filter((m) => m.open_count > 0);
+
+  const doneCount = enrichedAll.filter((m) => m.section.status === "done").length;
+
+  const enriched: MaterialOption[] = showDone
+    ? enrichedAll
+    : enrichedAll.filter((m) => ACTIVE_STATUSES.has(m.section.status));
 
   let activeDeepDive: ActiveDeepDive | null = null;
   const { data: activeSession } = await supabase
@@ -121,7 +133,10 @@ export default async function DeepDiveSelectorPage({
     : null;
 
   const previewStats: DeepDiveStats | null = previewMaterial
-    ? await fetchDeepDiveStats(supabase, user.id, previewMaterial.id)
+    ? await fetchDeepDiveStats(supabase, user.id, previewMaterial.id, {
+        section: previewMaterial.section,
+        leech_count: previewMaterial.leech_count,
+      })
     : null;
 
   return (
@@ -150,7 +165,7 @@ export default async function DeepDiveSelectorPage({
         </div>
       )}
 
-      {enriched.length === 0 ? (
+      {enrichedAll.length === 0 ? (
         <div className="bg-surface border border-line rounded-2xl p-12 flex flex-col items-center text-center gap-4">
           <BookOpen size={48} className="text-muted" />
           <div>
@@ -164,100 +179,160 @@ export default async function DeepDiveSelectorPage({
           </Button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr] gap-8 mt-8">
-          <ul className="space-y-2">
-            {enriched.map((m) => {
-              const isSelected = previewId === m.id;
-              return (
-                <li key={m.id}>
-                  <Link
-                    href={`/sessions/deep-dive?preview=${m.id}`}
-                    scroll={false}
-                    className={`block bg-surface border rounded-xl p-4 transition-colors ${
-                      isSelected
-                        ? "border-accent/60 bg-accent-soft/40"
-                        : activeDeepDive?.material_id === m.id
-                        ? "border-accent/60 hover:border-line-strong"
-                        : "border-line hover:border-line-strong"
-                    }`}
-                  >
-                    <div className="flex items-center gap-2 mb-2">
-                      <Chip variant="default" size="sm">
-                        {CATEGORY_LABELS[m.category]}
-                      </Chip>
-                      {activeDeepDive?.material_id === m.id && (
-                        <span className="font-mono text-[10px] uppercase tracking-wide text-accent">
-                          Kontynuuj
-                        </span>
-                      )}
-                    </div>
-                    <h3 className="font-serif text-[15px] leading-snug line-clamp-2">{m.title}</h3>
-                    <p className="font-mono text-[11px] text-muted mt-2">
-                      {m.open_count} {m.open_count === 1 ? "pytanie w puli" : "pytań w puli"} · runda{" "}
-                      {Math.min(m.open_count, DEEP_DIVE_ROUND_SIZE)}
-                    </p>
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
-
-          {previewMaterial && previewStats ? (
-            <DeepDivePreview
-              material={previewMaterial}
-              stats={previewStats}
-              roundSize={DEEP_DIVE_ROUND_SIZE}
-            />
-          ) : (
-            <div className="bg-surface border border-line rounded-2xl p-8 lg:min-h-[360px] flex flex-col items-center justify-center text-center gap-4">
-              <div className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted">
-                Wybierz materiał
-              </div>
-              <BookOpen size={48} className="text-muted" />
-              <p className="text-[14px] text-muted max-w-sm">
-                Kliknij materiał z listy obok, żeby zobaczyć statystyki i zacząć Deep Dive.
-              </p>
+        <>
+          {doneCount > 0 && (
+            <div className="mt-6 flex items-center justify-end">
+              <Link
+                href={showDone ? "/sessions/deep-dive" : "/sessions/deep-dive?show_done=1"}
+                scroll={false}
+                className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted hover:text-fg transition-colors"
+              >
+                {showDone ? "← Ukryj ukończone" : `Pokaż ukończone (${doneCount}) →`}
+              </Link>
             </div>
           )}
-        </div>
+
+          {enriched.length === 0 ? (
+            <div className="mt-6 bg-surface border border-line rounded-2xl p-10 flex flex-col items-center text-center gap-3">
+              <BookOpen size={40} className="text-muted" />
+              <div className="font-serif text-[18px]">Wszystko zaliczone ✓</div>
+              <p className="text-[13px] text-muted max-w-sm">
+                Aktywne materiały są opanowane. Audyty zadbają o długoterminową retencję.
+                Włącz „Pokaż ukończone” jeśli chcesz powtórzyć któryś.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr] gap-8 mt-6">
+              <ul className="space-y-2">
+                {enriched.map((m) => {
+                  const isSelected = previewId === m.id;
+                  return (
+                    <li key={m.id}>
+                      <Link
+                        href={`/sessions/deep-dive?preview=${m.id}${showDone ? "&show_done=1" : ""}`}
+                        scroll={false}
+                        className={`block bg-surface border rounded-xl p-4 transition-colors ${
+                          isSelected
+                            ? "border-accent/60 bg-accent-soft/40"
+                            : activeDeepDive?.material_id === m.id
+                            ? "border-accent/60 hover:border-line-strong"
+                            : "border-line hover:border-line-strong"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 mb-2">
+                          <Chip variant="default" size="sm">
+                            {CATEGORY_LABELS[m.category]}
+                          </Chip>
+                          {activeDeepDive?.material_id === m.id && (
+                            <span className="font-mono text-[10px] uppercase tracking-wide text-accent">
+                              Kontynuuj
+                            </span>
+                          )}
+                        </div>
+                        <h3 className="font-serif text-[15px] leading-snug line-clamp-2">{m.title}</h3>
+                        <p className="font-mono text-[11px] text-muted mt-2">
+                          {renderSectionMeta(m.section, m.leech_count)}
+                        </p>
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+
+              {previewMaterial && previewStats ? (
+                <DeepDivePreview
+                  material={previewMaterial}
+                  stats={previewStats}
+                  roundSize={DEEP_DIVE_ROUND_SIZE}
+                />
+              ) : (
+                <div className="bg-surface border border-line rounded-2xl p-8 lg:min-h-[360px] flex flex-col items-center justify-center text-center gap-4">
+                  <div className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted">
+                    Wybierz materiał
+                  </div>
+                  <BookOpen size={48} className="text-muted" />
+                  <p className="text-[14px] text-muted max-w-sm">
+                    Kliknij materiał z listy obok, żeby zobaczyć statystyki i zacząć Deep Dive.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+        </>
       )}
     </div>
   );
+}
+
+function renderSectionMeta(section: SectionStats, leechCount: number): string {
+  const leech = leechCount > 0 ? ` · 🐌 ${leechCount}` : "";
+  switch (section.status) {
+    case "fresh":
+      return `${section.total} pytań · świeży${leech}`;
+    case "in_progress":
+      return `${section.scored}/${section.total} ocenione · w toku${leech}`;
+    case "needs_followup":
+      return `${section.avg?.toFixed(1) ?? "—"} śr · ${section.weak_count} ${pluralWeak(section.weak_count)}${leech}`;
+    case "done":
+      return `${section.avg?.toFixed(1) ?? "—"} śr · ✓ zaliczone`;
+    case "below_threshold":
+      return `${section.avg?.toFixed(1) ?? "—"} śr · poniżej progu${leech}`;
+  }
+}
+
+function pluralWeak(n: number): string {
+  if (n === 1) return "słabe";
+  const lastDigit = n % 10;
+  const lastTwo = n % 100;
+  if (lastDigit >= 2 && lastDigit <= 4 && (lastTwo < 12 || lastTwo > 14)) return "słabe";
+  return "słabych";
 }
 
 async function fetchDeepDiveStats(
   supabase: Awaited<ReturnType<typeof createClient>>,
   userId: string,
   materialId: string,
+  sectionFromBatch?: { section: SectionStats; leech_count: number },
 ): Promise<DeepDiveStats> {
-  const nowIso = new Date().toISOString();
-
   const { data: openItemsRaw } = await supabase
     .from("items")
-    .select("id, question, fsrs_due_date, fsrs_stability")
+    .select("id, question, is_leech")
     .eq("user_id", userId)
     .eq("material_id", materialId)
     .eq("type", "open")
-    .eq("is_suspended", false);
+    .eq("is_suspended", false)
+    .is("audit_id", null);
 
   const items = (openItemsRaw ?? []) as {
     id: string;
     question: string;
-    fsrs_due_date: string | null;
-    fsrs_stability: number | null;
+    is_leech: boolean | null;
   }[];
   const openItemIds = items.map((i) => i.id);
-
-  const totalOpen = items.length;
-  const dueToday = items.filter((i) => i.fsrs_due_date && i.fsrs_due_date <= nowIso).length;
-  const mastered = items.filter((i) => (i.fsrs_stability ?? 0) >= MASTERY_STABILITY_DAYS).length;
   const questionById = new Map(items.map((i) => [i.id, i.question]));
+
+  // Section stats: prefer the batch-loaded one (from selector) to avoid
+  // duplicate work. Fall back to a fresh query for direct entry points.
+  let section: SectionStats;
+  let leechCount: number;
+  if (sectionFromBatch) {
+    section = sectionFromBatch.section;
+    leechCount = sectionFromBatch.leech_count;
+  } else {
+    const latestByItem = await getLatestScoresForItems(supabase, userId, openItemIds);
+    const latestScores = items.map((i) => latestByItem.get(i.id) ?? null);
+    section = computeSectionStatus(latestScores);
+    leechCount = items.filter((i) => i.is_leech === true).length;
+  }
 
   if (openItemIds.length === 0) {
     return {
       total_open: 0,
-      due_today: 0,
       mastered: 0,
+      weak_count: 0,
+      leech_count: 0,
+      section_status: section.status,
+      section_avg: null,
       total_reviews: 0,
       avg_score: null,
       sample_size: 0,
@@ -337,9 +412,12 @@ async function fetchDeepDiveStats(
   }
 
   return {
-    total_open: totalOpen,
-    due_today: dueToday,
-    mastered,
+    total_open: section.total,
+    mastered: section.mastered_count,
+    weak_count: section.weak_count,
+    leech_count: leechCount,
+    section_status: section.status,
+    section_avg: section.avg,
     total_reviews: totalReviews ?? 0,
     avg_score: avgScore,
     sample_size: scoredRows.length,
@@ -347,4 +425,69 @@ async function fetchDeepDiveStats(
     sparkline,
     last_review: lastReview,
   };
+}
+
+/**
+ * Batch query: pobiera latest_score per item dla wszystkich open items
+ * wszystkich podanych materiałów. Jedno query items + jedno reviews,
+ * dalej grupowane w pamięci. Skala max ~1000 wierszy (50-200 materiałów × 5).
+ */
+async function loadSectionStatsForMaterials(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+  materialIds: string[],
+): Promise<Map<string, { section: SectionStats; leech_count: number }>> {
+  const out = new Map<string, { section: SectionStats; leech_count: number }>();
+  if (materialIds.length === 0) return out;
+
+  const { data: itemsRaw } = await supabase
+    .from("items")
+    .select("id, material_id, is_leech")
+    .eq("user_id", userId)
+    .eq("type", "open")
+    .eq("is_suspended", false)
+    .is("audit_id", null)
+    .in("material_id", materialIds);
+
+  const items = (itemsRaw ?? []) as { id: string; material_id: string; is_leech: boolean | null }[];
+  if (items.length === 0) return out;
+
+  const latestByItem = await getLatestScoresForItems(supabase, userId, items.map((i) => i.id));
+
+  const byMaterial = new Map<string, { latestScores: Array<number | null>; leechCount: number }>();
+  for (const it of items) {
+    const entry = byMaterial.get(it.material_id) ?? { latestScores: [], leechCount: 0 };
+    entry.latestScores.push(latestByItem.get(it.id) ?? null);
+    if (it.is_leech) entry.leechCount += 1;
+    byMaterial.set(it.material_id, entry);
+  }
+
+  for (const [matId, entry] of byMaterial.entries()) {
+    out.set(matId, {
+      section: computeSectionStatus(entry.latestScores),
+      leech_count: entry.leechCount,
+    });
+  }
+  return out;
+}
+
+async function getLatestScoresForItems(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+  itemIds: string[],
+): Promise<Map<string, number | null>> {
+  const out = new Map<string, number | null>();
+  if (itemIds.length === 0) return out;
+
+  const { data } = await supabase
+    .from("reviews")
+    .select("item_id, score, created_at")
+    .eq("user_id", userId)
+    .in("item_id", itemIds)
+    .order("created_at", { ascending: false });
+
+  for (const row of (data ?? []) as { item_id: string; score: number | null }[]) {
+    if (!out.has(row.item_id)) out.set(row.item_id, row.score);
+  }
+  return out;
 }

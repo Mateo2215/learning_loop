@@ -5,6 +5,7 @@ import { applyRating, type FsrsRating } from "@/lib/fsrs/scheduler";
 import { trackAICall } from "@/lib/ai/track";
 import { validateOpenAnswer } from "@/lib/ai/validate-open";
 import { getCalibrationOffsets } from "@/lib/calibration/aggregator";
+import { shouldUpdateLeech, LEECH_FAILURE_THRESHOLD } from "@/lib/sessions/section-status";
 import type { Category, Item } from "@/lib/db/types";
 
 const AnswerBodySchema = z.object({
@@ -53,15 +54,16 @@ export async function POST(
     .maybeSingle();
   if (!session) return NextResponse.json({ error: "session not found" }, { status: 404 });
 
-  // Pull item + FSRS state. We also fetch question + reference + category for open-question validation.
+  // Pull item + FSRS state. We also fetch question + reference + category for open-question validation,
+  // and is_leech for open-question leech detection (3 consecutive score <7 → leech).
   const { data: item } = await supabase
     .from("items")
-    .select("id, material_id, type, question, answer_reference, category, fsrs_stability, fsrs_difficulty, fsrs_due_date, fsrs_last_review, fsrs_review_count, fsrs_lapse_count")
+    .select("id, material_id, type, question, answer_reference, category, fsrs_stability, fsrs_difficulty, fsrs_due_date, fsrs_last_review, fsrs_review_count, fsrs_lapse_count, is_leech")
     .eq("id", item_id)
     .maybeSingle();
   if (!item) return NextResponse.json({ error: "item not found" }, { status: 404 });
 
-  const itemTyped = item as Pick<Item, "id" | "material_id" | "type" | "question" | "answer_reference" | "category" | "fsrs_stability" | "fsrs_difficulty" | "fsrs_due_date" | "fsrs_last_review" | "fsrs_review_count" | "fsrs_lapse_count">;
+  const itemTyped = item as Pick<Item, "id" | "material_id" | "type" | "question" | "answer_reference" | "category" | "fsrs_stability" | "fsrs_difficulty" | "fsrs_due_date" | "fsrs_last_review" | "fsrs_review_count" | "fsrs_lapse_count" | "is_leech">;
 
   if (itemTyped.type === "cloze") {
     if (!fsrs_rating) {
@@ -176,6 +178,34 @@ export async function POST(
         { error: `review insert failed: ${reviewErr?.message}` },
         { status: 500 }
       );
+    }
+
+    // Leech detection dla open: po świeżym review pobieramy ostatnie N reviews
+    // (DESC) i sprawdzamy czy spełniona jest reguła shouldUpdateLeech.
+    // Non-blocking dla user — błąd loguje, ale nie psuje odpowiedzi.
+    try {
+      const { data: recentRows } = await supabase
+        .from("reviews")
+        .select("score")
+        .eq("user_id", user.id)
+        .eq("item_id", item_id)
+        .not("score", "is", null)
+        .order("created_at", { ascending: false })
+        .limit(LEECH_FAILURE_THRESHOLD);
+
+      const recentScores = ((recentRows ?? []) as { score: number | null }[])
+        .map((r) => r.score)
+        .filter((s): s is number => s !== null);
+
+      const newLeechState = shouldUpdateLeech(recentScores, itemTyped.is_leech ?? false);
+      if (newLeechState !== null) {
+        await supabase
+          .from("items")
+          .update({ is_leech: newLeechState })
+          .eq("id", item_id);
+      }
+    } catch (err) {
+      console.warn("[answer/open] leech detection failed:", err instanceof Error ? err.message : err);
     }
 
     return NextResponse.json({

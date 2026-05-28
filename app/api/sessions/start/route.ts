@@ -21,6 +21,8 @@ const StartBodySchema = z.object({
   bypass_new_limit: z.boolean().default(false),
   /** Deep Dive only: prioritize these items first (e.g. from "weakest" stats). */
   focus_item_ids: z.array(z.string().uuid()).optional(),
+  /** Deep Dive only: bypass mastery filter, include all items in original/staleness order. */
+  force_replay: z.boolean().default(false),
 });
 
 /**
@@ -50,7 +52,7 @@ export async function POST(request: NextRequest) {
       { status: 400 }
     );
   }
-  const { mode, material_id, audit_id, item_count, device, force, shuffle, bypass_new_limit, focus_item_ids } = parsed.data;
+  const { mode, material_id, audit_id, item_count, device, force, shuffle, bypass_new_limit, focus_item_ids, force_replay } = parsed.data;
 
   if (mode === "deep_dive" && !material_id) {
     return NextResponse.json(
@@ -188,6 +190,7 @@ export async function POST(request: NextRequest) {
     material_id!,
     capDeepDiveRoundSize(item_count),
     focus_item_ids,
+    force_replay,
   );
 
   if (items.length === 0) {
@@ -491,6 +494,7 @@ async function selectDeepDiveItems(
   materialId: string,
   limit: number,
   focusItemIds?: string[],
+  forceReplay = false,
 ): Promise<ReviewItem[]> {
   const { data } = await supabase
     .from("items")
@@ -508,31 +512,55 @@ async function selectDeepDiveItems(
   const latestReviewByItem = await getLatestReviewByItem(supabase, userId, items.map((item) => item.id));
   const originalOrder = new Map(items.map((item, index) => [item.id, index]));
 
-  const focusSet = new Set(focusItemIds ?? []);
-  const inFocus = focusSet.size > 0
-    ? items.filter((item) => focusSet.has(item.id))
-    : [];
-  const rest = focusSet.size > 0
-    ? items.filter((item) => !focusSet.has(item.id))
-    : items;
+  // Force replay (button "Powtórz wszystko" na zaliczonych materiałach) lub
+  // focus_item_ids (np. z gap detection): używamy starej logiki staleness,
+  // żeby user dostał kompletny przegląd niezależnie od mastery filter.
+  if (forceReplay || (focusItemIds && focusItemIds.length > 0)) {
+    const focusSet = new Set(focusItemIds ?? []);
+    const inFocus = focusSet.size > 0
+      ? items.filter((item) => focusSet.has(item.id))
+      : [];
+    const rest = focusSet.size > 0
+      ? items.filter((item) => !focusSet.has(item.id))
+      : items;
 
-  const sortByStaleness = (a: ReviewItem, b: ReviewItem) => {
-    const aReviewedAt = latestReviewByItem.get(a.id);
-    const bReviewedAt = latestReviewByItem.get(b.id);
-    if (!aReviewedAt && bReviewedAt) return -1;
-    if (aReviewedAt && !bReviewedAt) return 1;
-    if (!aReviewedAt && !bReviewedAt) {
-      return (originalOrder.get(a.id) ?? 0) - (originalOrder.get(b.id) ?? 0);
-    }
-    return new Date(aReviewedAt!).getTime() - new Date(bReviewedAt!).getTime();
-  };
+    const sortByStaleness = (a: ReviewItem, b: ReviewItem) => {
+      const aInfo = latestReviewByItem.get(a.id);
+      const bInfo = latestReviewByItem.get(b.id);
+      if (!aInfo && bInfo) return -1;
+      if (aInfo && !bInfo) return 1;
+      if (!aInfo && !bInfo) {
+        return (originalOrder.get(a.id) ?? 0) - (originalOrder.get(b.id) ?? 0);
+      }
+      return new Date(aInfo!.created_at).getTime() - new Date(bInfo!.created_at).getTime();
+    };
 
-  // Focus items go first (in caller's order), then the standard ordering fills the rest.
-  const focusOrdered = focusItemIds
-    ? focusItemIds.map((id) => inFocus.find((it) => it.id === id)).filter((it): it is ReviewItem => Boolean(it))
-    : [];
+    const focusOrdered = focusItemIds
+      ? focusItemIds.map((id) => inFocus.find((it) => it.id === id)).filter((it): it is ReviewItem => Boolean(it))
+      : [];
 
-  return [...focusOrdered, ...[...rest].sort(sortByStaleness)].slice(0, limit);
+    return [...focusOrdered, ...[...rest].sort(sortByStaleness)].slice(0, limit);
+  }
+
+  // Default: priorytet weak (latest_score ≤6) → fresh (nigdy nie pytane),
+  // pomijamy mastered (≥7). Materiał z section_status='done' da pustą sesję,
+  // która w UI wyświetla "empty" — taki materiał normalnie nie pojawia się
+  // w aktywnym selektorze.
+  const MASTERY_THRESHOLD = 7;
+  const enriched = items.map((item) => ({
+    item,
+    score: latestReviewByItem.get(item.id)?.score ?? null,
+  }));
+
+  const weak = enriched
+    .filter((e) => e.score !== null && e.score < MASTERY_THRESHOLD)
+    .sort((a, b) => (a.score ?? 0) - (b.score ?? 0)); // najgorsze najpierw
+
+  const fresh = enriched
+    .filter((e) => e.score === null)
+    .sort((a, b) => (originalOrder.get(a.item.id) ?? 0) - (originalOrder.get(b.item.id) ?? 0));
+
+  return [...weak, ...fresh].map((e) => e.item).slice(0, limit);
 }
 
 async function selectDeepDiveItemsByIds(
@@ -555,24 +583,31 @@ async function selectDeepDiveItemsByIds(
   return itemIds.map((id) => byId.get(id)).filter((item): item is ReviewItem => Boolean(item));
 }
 
+interface LatestReviewInfo {
+  created_at: string;
+  score: number | null;
+}
+
 async function getLatestReviewByItem(
   supabase: Awaited<ReturnType<typeof createClient>>,
   userId: string,
   itemIds: string[]
-): Promise<Map<string, string>> {
+): Promise<Map<string, LatestReviewInfo>> {
   if (itemIds.length === 0) return new Map();
 
   const { data } = await supabase
     .from("reviews")
-    .select("item_id, created_at")
+    .select("item_id, created_at, score")
     .eq("user_id", userId)
     .in("item_id", itemIds)
     .order("created_at", { ascending: false });
 
-  const latest = new Map<string, string>();
+  const latest = new Map<string, LatestReviewInfo>();
   for (const row of data ?? []) {
-    const review = row as { item_id: string; created_at: string };
-    if (!latest.has(review.item_id)) latest.set(review.item_id, review.created_at);
+    const review = row as { item_id: string; created_at: string; score: number | null };
+    if (!latest.has(review.item_id)) {
+      latest.set(review.item_id, { created_at: review.created_at, score: review.score });
+    }
   }
   return latest;
 }
