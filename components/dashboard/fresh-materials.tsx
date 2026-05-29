@@ -9,8 +9,8 @@ interface FreshMaterial {
   item_count: number;
 }
 
-function formatRelative(iso: string): string {
-  const ms = Date.now() - new Date(iso).getTime();
+function formatRelative(iso: string, nowMs: number): string {
+  const ms = nowMs - new Date(iso).getTime();
   const min = Math.max(1, Math.round(ms / 60000));
   if (min < 60) return `${min} min temu`;
   const h = Math.round(min / 60);
@@ -28,7 +28,8 @@ export async function FreshMaterials() {
   } = await supabase.auth.getUser();
   if (!user) return null;
 
-  const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const nowMs = new Date().getTime();
+  const since = new Date(nowMs - 24 * 60 * 60 * 1000).toISOString();
 
   const { data: materials } = await supabase
     .from("materials")
@@ -91,7 +92,7 @@ export async function FreshMaterials() {
                 {m.title}
               </Link>
               <div className="text-muted text-[12px] font-mono uppercase tracking-[0.15em] mt-1">
-                {formatRelative(m.imported_at)} · {m.item_count} pytań
+                {formatRelative(m.imported_at, nowMs)} · {m.item_count} pytań
               </div>
             </div>
             <Link

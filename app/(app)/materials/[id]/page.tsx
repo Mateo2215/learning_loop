@@ -96,8 +96,8 @@ export default async function MaterialDetailPage({
     if (g) suggestedGap = g as { id: string; title: string | null };
   }
 
-  const SourceIcon = pickSourceIcon(m.source_type);
   const quote = extractQuote(m.content_compressed);
+  const isFailed = m.status === "failed";
 
   return (
     <div className="max-w-[1024px] mx-auto px-6 py-10">
@@ -123,14 +123,16 @@ export default async function MaterialDetailPage({
         </nav>
 
         <div className="flex items-center gap-2">
-          <MaterialActions materialId={m.id} />
-          <Link
-            href={`/sessions/deep-dive/${m.id}`}
-            className="inline-flex items-center gap-1.5 bg-accent text-accent-fg px-3 py-1.5 rounded-lg text-[12px] font-medium hover:opacity-90 transition-opacity"
-          >
-            <Play className="h-3.5 w-3.5" />
-            Start sesji
-          </Link>
+          {!isFailed && <MaterialActions materialId={m.id} />}
+          {!isFailed && itemList.length > 0 && (
+            <Link
+              href={`/sessions/deep-dive/${m.id}`}
+              className="inline-flex items-center gap-1.5 bg-accent text-accent-fg px-3 py-1.5 rounded-lg text-[12px] font-medium hover:opacity-90 transition-opacity"
+            >
+              <Play className="h-3.5 w-3.5" />
+              Start sesji
+            </Link>
+          )}
           <DeleteMaterialButton materialId={m.id} itemCount={itemList.length} />
         </div>
       </div>
@@ -159,6 +161,21 @@ export default async function MaterialDetailPage({
         </div>
       )}
 
+      {isFailed && (
+        <div className="mb-6 rounded-lg border border-bad/35 bg-bad/10 px-5 py-3 flex items-start gap-3">
+          <AlertTriangle className="h-4 w-4 text-bad mt-0.5 shrink-0" />
+          <div>
+            <div className="font-mono text-[11px] uppercase tracking-[0.15em] text-bad mb-1">
+              Import nie zakończył się poprawnie
+            </div>
+            <p className="text-[13px] text-subtle leading-relaxed">
+              Ten materiał może być częściowy i nie jest gotowy do nauki. Najbezpieczniej
+              powtórzyć import po sprawdzeniu błędu z ekranu importu.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Title + meta + mastery */}
       <div className="flex flex-col md:flex-row gap-8 mb-10">
         <div className="md:w-[200px] shrink-0">
@@ -177,7 +194,7 @@ export default async function MaterialDetailPage({
               </div>
             ) : (
               <div className="absolute inset-0 bg-elevated border border-line flex flex-col items-center justify-center p-4">
-                <SourceIcon className="h-12 w-12 text-muted mb-3" />
+                <SourceIconMark sourceType={m.source_type} />
                 {m.source_filename && (
                   <span className="text-[12px] font-mono text-muted text-center line-clamp-2 break-all">
                     {m.source_filename}
@@ -194,6 +211,7 @@ export default async function MaterialDetailPage({
           </h1>
           <div className="flex flex-wrap gap-1.5 mb-4">
             <Chip variant="default">{CATEGORY_LABELS[m.category]}</Chip>
+            {isFailed && <Chip variant="danger">Błąd</Chip>}
             {m.tags?.map((t, i) => (
               <Chip key={`${t}-${i}`} variant="default">
                 {t}
@@ -252,10 +270,10 @@ function formatDate(iso: string): string {
   }).format(new Date(iso));
 }
 
-function pickSourceIcon(t: string | null) {
-  if (t === "url") return Globe;
-  if (t === "paste") return FileEdit;
-  return FileText;
+function SourceIconMark({ sourceType }: { sourceType: string | null }) {
+  if (sourceType === "url") return <Globe className="h-12 w-12 text-muted mb-3" />;
+  if (sourceType === "paste") return <FileEdit className="h-12 w-12 text-muted mb-3" />;
+  return <FileText className="h-12 w-12 text-muted mb-3" />;
 }
 
 function extractQuote(text: string | null): string | null {

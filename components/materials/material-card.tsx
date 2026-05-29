@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { Chip } from "@/components/ui/chip";
 import { MasteryBar, type MasterySegments } from "@/components/shared/mastery-bar";
-import { CATEGORY_LABELS, type Category } from "@/lib/db/types";
+import { CATEGORY_LABELS, type Category, type MaterialStatus } from "@/lib/db/types";
 import { cn } from "@/lib/utils";
 
 export interface MaterialCardProps {
@@ -13,6 +13,7 @@ export interface MaterialCardProps {
   importedAt: string;
   itemsTotal: number;
   segments: MasterySegments;
+  status?: MaterialStatus;
   isStale?: boolean;
 }
 
@@ -23,8 +24,11 @@ export function MaterialCard({
   tags,
   itemsTotal,
   segments,
+  status = "ready",
   isStale,
 }: MaterialCardProps) {
+  const isFailed = status === "failed";
+
   return (
     <Link
       href={`/materials/${id}`}
@@ -35,6 +39,7 @@ export function MaterialCard({
     >
       <div className="flex items-start gap-3 mb-4">
         <Chip variant="default">{CATEGORY_LABELS[category]}</Chip>
+        {isFailed && <Chip variant="danger">Błąd</Chip>}
         <h3 className="flex-1 font-serif text-[18px] tracking-[-0.015em] text-fg line-clamp-2">
           {title}
         </h3>
@@ -50,7 +55,13 @@ export function MaterialCard({
         </div>
       )}
 
-      <MasteryBar segments={segments} total={itemsTotal} showLegend />
+      {isFailed ? (
+        <p className="text-sm text-bad">
+          Import nie zakończył się poprawnie. Materiał może być częściowy.
+        </p>
+      ) : (
+        <MasteryBar segments={segments} total={itemsTotal} showLegend />
+      )}
     </Link>
   );
 }

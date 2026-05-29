@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { generateClozeCards, generateOpenQuestions } from "@/lib/processing/generate-items";
+import { buildGeneratedItemRows } from "@/lib/processing/generated-item-rows";
 import { trackAICall } from "@/lib/ai/track";
 
 /**
@@ -22,7 +23,7 @@ export async function POST(request: NextRequest) {
 
   const { data: material } = await supabase
     .from("materials")
-    .select("id, content_compressed, category")
+    .select("id, content_compressed, category, tags")
     .eq("id", materialId)
     .eq("user_id", user.id)
     .is("deleted_at", null)
@@ -31,6 +32,17 @@ export async function POST(request: NextRequest) {
   if (!material) return NextResponse.json({ error: "material not found" }, { status: 404 });
   if (!material.content_compressed) {
     return NextResponse.json({ error: "material has no compressed content" }, { status: 422 });
+  }
+
+  const { data: existingQuestions, error: existingErr } = await supabase
+    .from("items")
+    .select("question")
+    .eq("material_id", materialId)
+    .eq("user_id", user.id)
+    .is("audit_id", null);
+
+  if (existingErr) {
+    return NextResponse.json({ error: existingErr.message }, { status: 500 });
   }
 
   let clozeCards: Awaited<ReturnType<typeof generateClozeCards>>["cards"] = [];
@@ -72,28 +84,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: msg }, { status: 500 });
   }
 
-  const clozeRows = clozeCards.map((card) => ({
-    user_id: user.id,
-    material_id: materialId,
-    type: "cloze" as const,
-    question: `{{c1::${card.answer}}}`,
-    answer_reference: card.answer,
-    cloze_data: { front: card.front, answer: card.answer },
-    difficulty: card.difficulty,
-    category: material.category,
-  }));
-
-  const openRows = openQuestions.map((q) => ({
-    user_id: user.id,
-    material_id: materialId,
-    type: "open" as const,
-    question: q.question,
-    answer_reference: q.answer_reference,
-    difficulty: q.difficulty,
-    category: material.category,
-  }));
-
-  const allRows = [...clozeRows, ...openRows];
+  const allRows = buildGeneratedItemRows({
+    userId: user.id,
+    material,
+    clozeCards,
+    openQuestions,
+    existingQuestions: existingQuestions ?? [],
+  });
   if (allRows.length === 0) {
     return NextResponse.json({ added: 0 });
   }

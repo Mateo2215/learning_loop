@@ -287,7 +287,6 @@ export default function AuditRunPage({ params }: { params: Promise<{ audit_id: s
           disabled={phase === "validating"}
           autoFocus
           rows={6}
-          mode="voice"
         />
       )}
 

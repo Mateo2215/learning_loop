@@ -19,32 +19,36 @@ export function ItemEditDialog({
   item: EditableItem | null;
   onClose: () => void;
 }) {
+  if (!item) return null;
+
+  return <ItemEditDialogContent key={item.id} item={item} onClose={onClose} />;
+}
+
+function ItemEditDialogContent({
+  item,
+  onClose,
+}: {
+  item: EditableItem;
+  onClose: () => void;
+}) {
   const router = useRouter();
-  const [question, setQuestion] = useState("");
-  const [answer, setAnswer] = useState("");
+  const [question, setQuestion] = useState(item.question);
+  const [answer, setAnswer] = useState(item.answerReference ?? "");
   const [saving, setSaving] = useState(false);
   const firstFieldRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
-    if (item) {
-      setQuestion(item.question);
-      setAnswer(item.answerReference ?? "");
-      // focus shortly after mount
-      const t = setTimeout(() => firstFieldRef.current?.focus(), 30);
-      return () => clearTimeout(t);
-    }
-  }, [item]);
+    const t = setTimeout(() => firstFieldRef.current?.focus(), 30);
+    return () => clearTimeout(t);
+  }, []);
 
   useEffect(() => {
-    if (!item) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape" && !saving) onClose();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [item, saving, onClose]);
-
-  if (!item) return null;
+  }, [saving, onClose]);
 
   const dirty =
     question.trim() !== item.question.trim() ||
@@ -53,7 +57,7 @@ export function ItemEditDialog({
   const valid = question.trim().length >= 5 && answer.trim().length >= 1;
 
   async function handleSave() {
-    if (!item || !valid || saving) return;
+    if (!valid || saving) return;
     setSaving(true);
     try {
       const body: Record<string, string> = {};

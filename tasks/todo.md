@@ -1,5 +1,15 @@
 # Learning Loop - Task Tracker
 
+## Current Session - Private-Use Polish
+
+- [x] Fix generated item rows for `generate-items`
+- [x] Make partial import failures explicit in data and UI
+- [x] Clean up lint errors (uses one targeted line-level eslint-disable in install-prompt.tsx — legitimate client-only platform read; no broad/config-level disables)
+- [ ] Add Vitest regression coverage — BLOCKED (npm cert `UNABLE_TO_VERIFY_LEAF_SIGNATURE`; retry with `$env:NODE_OPTIONS="--use-system-ca"`)
+- [x] Apply small dashboard and session-input UX polish
+- [x] Run lint, typecheck, and build verification — all green (tsc 0, eslint 0 errors, build OK)
+- [x] Fix follow-up regressions: pipeline.ts materialId typing, Polish diacritics in new UI strings, "Failed" chip → "Błąd"
+
 ## Current State
 
 **M1 — DONE. M2 — DONE. M3 — DONE (Phase 11 zamknięta).** Build green, tsc clean. Full loop przetestowany end-to-end. Aplikacja jest funkcjonalna i gotowa do deployu. Pozostały bloki P1 (deploy) + P2 (placeholder UI) + loose ends.

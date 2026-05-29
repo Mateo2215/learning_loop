@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -27,6 +28,7 @@ interface JobState {
     cloze_count?: number;
     open_count?: number;
     was_truncated?: boolean;
+    partial_material?: boolean;
   } | null;
 }
 
@@ -333,9 +335,25 @@ export default function ImportPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <Button onClick={() => { setPhase("form"); setJobState(null); setErrorMessage(null); }}>
-                Spróbuj ponownie
-              </Button>
+              <div className="flex flex-col gap-3">
+                {jobState?.result?.partial_material && jobState.result.material_id && (
+                  <div className="rounded-md border border-warn/35 bg-warn/10 px-4 py-3 text-sm text-subtle">
+                    <p>
+                      Materiał został utworzony częściowo, ale nie jest gotowy do nauki.
+                      Możesz go otworzyć, żeby sprawdzić status.
+                    </p>
+                    <Link
+                      href={`/materials/${jobState.result.material_id}`}
+                      className="mt-2 inline-flex text-warn underline underline-offset-2 hover:no-underline"
+                    >
+                      Otwórz częściowy materiał
+                    </Link>
+                  </div>
+                )}
+                <Button onClick={() => { setPhase("form"); setJobState(null); setErrorMessage(null); }}>
+                  Spróbuj ponownie
+                </Button>
+              </div>
             </CardContent>
           </Card>
         )}

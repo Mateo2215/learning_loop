@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ArrowRight } from "lucide-react";
+import type { User } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { KPICard } from "@/components/shared/kpi-card";
 import { Chip } from "@/components/ui/chip";
@@ -14,8 +15,11 @@ export default async function DashboardPage() {
 
   if (!user) redirect("/login");
 
-  const nowIso = new Date().toISOString();
-  const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const now = new Date();
+  const nowMs = now.getTime();
+  const nowIso = now.toISOString();
+  const since24h = new Date(nowMs - 24 * 60 * 60 * 1000).toISOString();
+  const since90d = new Date(nowMs - 90 * 24 * 60 * 60 * 1000).toISOString();
 
   const [
     { count: dueCount },
@@ -58,7 +62,7 @@ export default async function DashboardPage() {
     supabase
       .from("reviews")
       .select("created_at")
-      .gte("created_at", new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString())
+      .gte("created_at", since90d)
       .order("created_at", { ascending: false }),
   ]);
 
@@ -71,32 +75,21 @@ export default async function DashboardPage() {
   // Round 2: count library items per material + find which open items were already answered.
   const recentIds = (recentMaterials ?? []).map((m) => m.id);
   const openItemIds = (openItemsData ?? []).map((i) => (i as { id: string }).id);
-  let countByMaterial = new Map<string, number>();
-  let reviewedOpenIds = new Set<string>();
+  const { data: itemRows } = recentIds.length > 0
+    ? await supabase.from("items").select("material_id").in("material_id", recentIds)
+    : { data: [] };
+  const countByMaterial = new Map<string, number>();
+  for (const row of itemRows ?? []) {
+    const id = (row as { material_id: string }).material_id;
+    countByMaterial.set(id, (countByMaterial.get(id) ?? 0) + 1);
+  }
 
-  await Promise.all([
-    (async () => {
-      if (recentIds.length === 0) return;
-      const { data: itemRows } = await supabase
-        .from("items")
-        .select("material_id")
-        .in("material_id", recentIds);
-      for (const row of itemRows ?? []) {
-        const id = (row as { material_id: string }).material_id;
-        countByMaterial.set(id, (countByMaterial.get(id) ?? 0) + 1);
-      }
-    })(),
-    (async () => {
-      if (openItemIds.length === 0) return;
-      const { data: reviewedRows } = await supabase
-        .from("reviews")
-        .select("item_id")
-        .in("item_id", openItemIds);
-      reviewedOpenIds = new Set(
-        (reviewedRows ?? []).map((r) => (r as { item_id: string }).item_id)
-      );
-    })(),
-  ]);
+  const { data: reviewedRows } = openItemIds.length > 0
+    ? await supabase.from("reviews").select("item_id").in("item_id", openItemIds)
+    : { data: [] };
+  const reviewedOpenIds = new Set(
+    (reviewedRows ?? []).map((r) => (r as { item_id: string }).item_id)
+  );
 
   // Group only unanswered open items by material.
   const openByMaterial = new Map<string, number>();
@@ -122,12 +115,20 @@ export default async function DashboardPage() {
     deepDiveMaterials = (data ?? []) as { id: string; title: string }[];
   }
 
+  const displayName = getDisplayName(user);
+  const primaryCta =
+    (dueCount ?? 0) > 0
+      ? { href: "/sessions/review", label: "Zacznij powtórki" }
+      : deepDiveMaterials[0]
+        ? { href: `/sessions/deep-dive/${deepDiveMaterials[0].id}`, label: "Zrób Deep Dive" }
+        : { href: "/materials/import", label: "Dodaj materiał" };
+
   return (
     <div className="max-w-[1024px] mx-auto px-6 py-10 space-y-10">
       {/* Greeting */}
       <header>
         <h1 className="font-serif text-[44px] tracking-[-0.015em] leading-[1.05] text-fg">
-          Dzień dobry, Mateusz
+          Dzień dobry, {displayName}
         </h1>
         <p className="mt-3 text-muted text-[13px] uppercase font-mono tracking-[0.15em]">
           {formatTodayHeader()}
@@ -156,10 +157,10 @@ export default async function DashboardPage() {
           )}
         </div>
         <Link
-          href="/sessions/review"
+          href={primaryCta.href}
           className="bg-accent text-accent-fg px-5 py-3 rounded-lg font-medium text-[14px] inline-flex items-center gap-2 hover:opacity-90 transition-opacity self-start md:self-auto"
         >
-          Zacznij powtórki
+          {primaryCta.label}
           <ArrowRight className="h-4 w-4" />
         </Link>
       </section>
@@ -358,6 +359,15 @@ function labelForCategory(c: string): string {
     ogolne: "Ogólne",
   };
   return map[c] ?? c;
+}
+
+function getDisplayName(user: User): string {
+  const fullName = user.user_metadata?.full_name;
+  if (typeof fullName === "string" && fullName.trim().length > 0) {
+    return fullName.trim();
+  }
+  const emailPrefix = user.email?.split("@")[0]?.trim();
+  return emailPrefix || "uczniu";
 }
 
 interface StreakStats {

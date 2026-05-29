@@ -31,6 +31,9 @@ interface PipelineContext {
 
 export async function processMaterial(ctx: PipelineContext): Promise<{ materialId: string }> {
   const { supabase, userId, jobId, payload } = ctx;
+  // Tracks the inserted material so the catch handler can mark it failed.
+  // The happy path uses a local `const materialId` (narrowed to string).
+  let createdMaterialId: string | null = null;
 
   await markJob(supabase, jobId, { status: "running", progress: 5, started_at: new Date().toISOString() });
 
@@ -108,6 +111,7 @@ export async function processMaterial(ctx: PipelineContext): Promise<{ materialI
       .single();
     if (insertErr || !material) throw new Error(`materials insert failed: ${insertErr?.message}`);
     const materialId = material.id;
+    createdMaterialId = materialId;
     await markJob(supabase, jobId, { progress: 55 });
 
     // Persist dedup relations now that we have a material_id to link from.
@@ -190,7 +194,7 @@ export async function processMaterial(ctx: PipelineContext): Promise<{ materialI
     await markJob(supabase, jobId, { progress: 90 });
 
     // Step 8: schedule audits (day_7, day_30, day_90)
-    const now = Date.now();
+    const now = new Date().getTime();
     const auditRows = [
       { user_id: userId, material_id: materialId, scheduled_for: new Date(now + 7 * 86400_000).toISOString(), trigger: "day_7" as const },
       { user_id: userId, material_id: materialId, scheduled_for: new Date(now + 30 * 86400_000).toISOString(), trigger: "day_30" as const },
@@ -238,10 +242,24 @@ export async function processMaterial(ctx: PipelineContext): Promise<{ materialI
     return { materialId };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
+    const result = createdMaterialId
+      ? { material_id: createdMaterialId, partial_material: true }
+      : undefined;
+
+    if (createdMaterialId) {
+      const { error: materialErr } = await supabase
+        .from("materials")
+        .update({ status: "failed" })
+        .eq("id", createdMaterialId)
+        .eq("user_id", userId);
+      if (materialErr) console.warn("[pipeline] mark material failed failed:", materialErr.message);
+    }
+
     await markJob(supabase, jobId, {
       status: "failed",
       error: message,
       completed_at: new Date().toISOString(),
+      ...(result ? { result } : {}),
     });
     throw err;
   }

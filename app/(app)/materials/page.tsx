@@ -7,7 +7,7 @@ import { Chip } from "@/components/ui/chip";
 import { SectionHeader } from "@/components/shared/section-header";
 import { EmptyState } from "@/components/shared/empty-state";
 import { MaterialCard } from "@/components/materials/material-card";
-import { CATEGORIES, CATEGORY_LABELS, type Category } from "@/lib/db/types";
+import { CATEGORIES, CATEGORY_LABELS, type Category, type MaterialStatus } from "@/lib/db/types";
 
 interface SearchParams {
   q?: string;
@@ -28,7 +28,7 @@ export default async function MaterialsPage({
 
   let query = supabase
     .from("materials")
-    .select("id, title, category, tags, imported_at")
+    .select("id, title, category, tags, imported_at, status")
     .is("deleted_at", null)
     .order("imported_at", { ascending: false });
 
@@ -62,6 +62,7 @@ export default async function MaterialsPage({
 
   const groups = groupByMonth((materials ?? []) as MaterialRow[]);
   const filterChips = buildFilterChips(materials, cat);
+  const nowMs = new Date().getTime();
 
   return (
     <div className="max-w-[1024px] mx-auto px-6 py-10">
@@ -139,7 +140,7 @@ export default async function MaterialsPage({
                 {rows.map((m) => {
                   const items = itemsByMaterial.get(m.id) ?? [];
                   const segments = computeSegments(items);
-                  const stale = isStale(m.imported_at);
+                  const stale = isStale(m.imported_at, nowMs);
                   return (
                     <MaterialCard
                       key={m.id}
@@ -150,6 +151,7 @@ export default async function MaterialsPage({
                       importedAt={m.imported_at}
                       itemsTotal={items.length}
                       segments={segments}
+                      status={m.status}
                       isStale={stale}
                     />
                   );
@@ -169,6 +171,7 @@ interface MaterialRow {
   category: Category;
   tags: string[] | null;
   imported_at: string;
+  status: MaterialStatus;
 }
 
 interface FilterChip {
@@ -258,7 +261,7 @@ function computeSegments(items: { stability: number | null }[]): {
   return seg;
 }
 
-function isStale(iso: string): boolean {
-  const days = (Date.now() - new Date(iso).getTime()) / (1000 * 60 * 60 * 24);
+function isStale(iso: string, nowMs: number): boolean {
+  const days = (nowMs - new Date(iso).getTime()) / (1000 * 60 * 60 * 24);
   return days > 30;
 }

@@ -19,13 +19,13 @@ interface BeforeInstallPromptEvent extends Event {
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
 }
 
-function dismissedRecently(): boolean {
+function dismissedRecently(nowMs: number = new Date().getTime()): boolean {
   try {
     const raw = localStorage.getItem(DISMISS_KEY);
     if (!raw) return false;
     const ts = Number(raw);
     if (!ts) return false;
-    return Date.now() - ts < DISMISS_DAYS * 86_400_000;
+    return nowMs - ts < DISMISS_DAYS * 86_400_000;
   } catch {
     return false;
   }
@@ -48,12 +48,11 @@ function isIos(): boolean {
 export function InstallPrompt() {
   const [deferred, setDeferred] = useState<BeforeInstallPromptEvent | null>(null);
   const [showIosHint, setShowIosHint] = useState(false);
-  const [dismissed, setDismissed] = useState(true);
+  const [dismissed, setDismissed] = useState(false);
 
   useEffect(() => {
     if (isStandalone()) return;
     if (dismissedRecently()) return;
-    setDismissed(false);
 
     const handler = (e: Event) => {
       e.preventDefault();
@@ -61,6 +60,9 @@ export function InstallPrompt() {
     };
     window.addEventListener("beforeinstallprompt", handler);
 
+    // iOS Safari nie emituje beforeinstallprompt — wykrywamy platformę raz na
+    // mount; to legalna synchronizacja z systemem zewnętrznym, nie kaskada renderów.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (isIos()) setShowIosHint(true);
 
     return () => window.removeEventListener("beforeinstallprompt", handler);
@@ -68,7 +70,7 @@ export function InstallPrompt() {
 
   function dismiss() {
     try {
-      localStorage.setItem(DISMISS_KEY, String(Date.now()));
+      localStorage.setItem(DISMISS_KEY, String(new Date().getTime()));
     } catch {
       /* noop */
     }

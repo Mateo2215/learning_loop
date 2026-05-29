@@ -327,7 +327,6 @@ export default function DeepDivePage({ params }: { params: Promise<{ material_id
                 disabled={phase === "validating"}
                 autoFocus
                 rows={8}
-                mode="voice"
                 onSubmitShortcut={() => void submitAnswer()}
               />
 

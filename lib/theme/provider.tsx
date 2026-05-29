@@ -83,28 +83,18 @@ function applyResolved(resolved: ResolvedTheme): void {
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  // Default state matches the SSR-rendered <html> attribute (no data-theme = light).
-  // After hydration we read storage + system preference and re-apply.
-  const [theme, setThemeState] = useState<ThemeChoice>("system");
-  const [autoSwitchEnabled, setAutoSwitchEnabledState] = useState(false);
-  const [resolvedTheme, setResolvedTheme] = useState<ResolvedTheme>("light");
-  const [hydrated, setHydrated] = useState(false);
+  const [theme, setThemeState] = useState<ThemeChoice>(() => readStoredTheme());
+  const [autoSwitchEnabled, setAutoSwitchEnabledState] = useState(() => readAutoSwitch());
+  const [resolvedTheme, setResolvedTheme] = useState<ResolvedTheme>(() =>
+    resolveTheme(readStoredTheme(), readAutoSwitch())
+  );
 
-  // Hydrate from storage on mount
   useEffect(() => {
-    const stored = readStoredTheme();
-    const auto = readAutoSwitch();
-    const resolved = resolveTheme(stored, auto);
-    setThemeState(stored);
-    setAutoSwitchEnabledState(auto);
-    setResolvedTheme(resolved);
-    applyResolved(resolved);
-    setHydrated(true);
-  }, []);
+    applyResolved(resolvedTheme);
+  }, [resolvedTheme]);
 
   // Listen for OS theme changes when in 'system' mode
   useEffect(() => {
-    if (!hydrated) return;
     if (theme !== "system") return;
     const mq = window.matchMedia("(prefers-color-scheme: dark)");
     const onChange = () => {
@@ -114,11 +104,10 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     };
     mq.addEventListener("change", onChange);
     return () => mq.removeEventListener("change", onChange);
-  }, [hydrated, theme, autoSwitchEnabled]);
+  }, [theme, autoSwitchEnabled]);
 
   // Re-evaluate every 5 minutes so auto-switch flips at 19:00 without a refresh
   useEffect(() => {
-    if (!hydrated) return;
     if (!autoSwitchEnabled) return;
     const interval = setInterval(() => {
       const resolved = resolveTheme(theme, true);
@@ -128,7 +117,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       });
     }, 5 * 60 * 1000);
     return () => clearInterval(interval);
-  }, [hydrated, theme, autoSwitchEnabled]);
+  }, [theme, autoSwitchEnabled]);
 
   const setTheme = useCallback(
     (next: ThemeChoice) => {

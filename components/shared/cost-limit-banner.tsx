@@ -24,10 +24,10 @@ export async function CostLimitBanner() {
   const softHit = monthlyUsd >= COST_LIMITS.monthlySoftUsd;
   if (!softHit) return null;
 
-  const tone = hardHit ? "bad" : "warn";
   const toneClass = hardHit
     ? "border-bad/40 bg-bad/10 text-bad"
     : "border-warn/40 bg-warn/10 text-warn";
+  const linkClass = hardHit ? "text-bad" : "text-warn";
 
   return (
     <div
@@ -41,7 +41,7 @@ export async function CostLimitBanner() {
       </span>
       <Link
         href="/settings/costs"
-        className={`shrink-0 underline underline-offset-2 hover:no-underline text-${tone}`}
+        className={`shrink-0 underline underline-offset-2 hover:no-underline ${linkClass}`}
       >
         Zobacz koszty →
       </Link>
