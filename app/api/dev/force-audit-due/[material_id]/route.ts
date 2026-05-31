@@ -4,9 +4,9 @@ import { createClient } from "@/lib/supabase/server";
 /**
  * POST /api/dev/force-audit-due/[material_id]
  *
- * Test helper: marks the day_7 audit for this material as `pending` with
- * `scheduled_for = now() - 1h`, so it shows up immediately on /sessions/audit.
- * Does NOT touch day_30 / day_90 rows. Disabled in production.
+ * Test helper: sprawia, że materiał jest natychmiast gotowy do audytu. Jeśli
+ * istnieje pending audyt — cofa jego `scheduled_for` w przeszłość. Jeśli nie —
+ * tworzy adaptacyjny audyt round 1 z terminem w przeszłości. Disabled in production.
  */
 export async function POST(
   _request: NextRequest,
@@ -23,17 +23,36 @@ export async function POST(
 
   const oneHourAgo = new Date(Date.now() - 3600_000).toISOString();
 
-  const { data, error } = await supabase
+  const { data: existing } = await supabase
     .from("topic_audits")
-    .update({ scheduled_for: oneHourAgo, status: "pending" })
+    .select("id")
     .eq("user_id", user.id)
     .eq("material_id", material_id)
-    .eq("trigger", "day_7")
-    .select("id, scheduled_for");
+    .eq("status", "pending")
+    .maybeSingle();
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  if (existing) {
+    const { data, error } = await supabase
+      .from("topic_audits")
+      .update({ scheduled_for: oneHourAgo })
+      .eq("id", (existing as { id: string }).id)
+      .select("id, scheduled_for, audit_round");
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ ok: true, action: "rescheduled", rows: data ?? [] });
   }
 
-  return NextResponse.json({ ok: true, updated: data?.length ?? 0, rows: data ?? [] });
+  const { data, error } = await supabase
+    .from("topic_audits")
+    .insert({
+      user_id: user.id,
+      material_id,
+      scheduled_for: oneHourAgo,
+      trigger: "adaptive" as const,
+      audit_round: 1,
+      status: "pending" as const,
+    })
+    .select("id, scheduled_for, audit_round");
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ ok: true, action: "created", rows: data ?? [] });
 }

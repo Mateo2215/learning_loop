@@ -193,18 +193,9 @@ export async function processMaterial(ctx: PipelineContext): Promise<{ materialI
     }
     await markJob(supabase, jobId, { progress: 90 });
 
-    // Step 8: schedule audits (day_7, day_30, day_90)
-    const now = new Date().getTime();
-    const auditRows = [
-      { user_id: userId, material_id: materialId, scheduled_for: new Date(now + 7 * 86400_000).toISOString(), trigger: "day_7" as const },
-      { user_id: userId, material_id: materialId, scheduled_for: new Date(now + 30 * 86400_000).toISOString(), trigger: "day_30" as const },
-      { user_id: userId, material_id: materialId, scheduled_for: new Date(now + 90 * 86400_000).toISOString(), trigger: "day_90" as const },
-    ];
-    const { error: auditErr } = await supabase.from("topic_audits").insert(auditRows);
-    if (auditErr) {
-      // Non-fatal — log but continue. Audits can be re-scheduled later.
-      console.warn("[pipeline] audit scheduling failed:", auditErr.message);
-    }
+    // Step 8: (audyty NIE są już planowane przy imporcie). Adaptacyjny audyt
+    // startuje dopiero po opanowaniu materiału — patrz brama mastery w
+    // app/api/sessions/[id]/end/route.ts.
 
     // Step 9: mark material ready
     const { error: readyErr } = await supabase

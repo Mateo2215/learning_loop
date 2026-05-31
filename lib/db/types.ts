@@ -23,7 +23,7 @@ export type AIEvaluation = "correct" | "partially_correct" | "incorrect";
 
 export type Calibration = "agree" | "too_strict" | "too_lenient";
 
-export type AuditTrigger = "day_7" | "day_30" | "day_90" | "resurrection";
+export type AuditTrigger = "day_7" | "day_30" | "day_90" | "resurrection" | "adaptive";
 
 export type AuditStatus = "pending" | "completed" | "skipped";
 
@@ -136,6 +136,7 @@ export interface TopicAudit {
   session_id: string | null;
   scheduled_for: string;
   trigger: AuditTrigger;
+  audit_round: number;
   status: AuditStatus;
   completed_at: string | null;
   performance_score: number | null;

@@ -4,6 +4,45 @@ Session handoff log. Most recent entry on top. Keep this file under 200 lines.
 
 ---
 
+## 2026-05-31 — Przeprojektowanie audytu: model adaptacyjny „pull", skonsolidowana sesja
+
+### Powód
+Stary audyt przeciążał użytkownika i de facto nie działał (0 wykonanych). Audyty
+powstawały przy imporcie (3 wiersze 7/30/90 dni × 3 pytania/materiał), bez limitu i
+konsolidacji → kolejka rosła szybciej niż dało się ją czyścić. Decyzje produktowe
+potwierdzone z użytkownikiem: jedna wspólna sesja (≤3 pytania, 1/materiał), model „pull"
+bez presji, start dopiero po opanowaniu materiału, interwały adaptacyjne wg wyniku.
+
+### Zmiana
+- **Migracja `0010_adaptive_audits.sql`**: kolumna `audit_round`, `trigger` += `'adaptive'`,
+  cleanup backlogu (`pending` → `skipped`), unikalny indeks „1 pending/materiał".
+- **`lib/audits/intervals.ts`** (+ test, 7/7 pass): drabina `[7,21,60,150,365]`,
+  `nextAuditInterval(round, score)` — dobry wynik wspina się, słaby spada (podłoga 7d).
+- **`lib/processing/pipeline.ts`**: usunięte tworzenie audytów przy imporcie.
+- **`lib/audits/scheduler.ts`**: `prepareAudit` → 1 pytanie; `scheduleNextAudit`,
+  `scheduleFirstAuditIfMastered` (brama mastery używa `computeSectionStatus`), `createPendingAudit`.
+- **`app/api/sessions/start/route.ts`** (`mode:'audit'`): pulowa, skonsolidowana sesja —
+  ≤3 najstarszych due audytów (różne materiały), 1 pytanie każdy, jedna sesja, `queued_remaining`.
+- **`app/api/sessions/[id]/end/route.ts`**: rozlicza wszystkie audyty sesji (perf + adaptacyjny
+  reschedule); pomija audyty bez odpowiedzi (zostają pending); dla `deep_dive` — brama mastery.
+- **UI**: nowa `app/(app)/sessions/audit/run/page.tsx` (zastąpiła `[audit_id]`), uproszczona
+  lista `audit/page.tsx` (Do sprawdzenia / Nadchodzące / Wykonane, etykiety „Audyt #N").
+- **Surfacing „pull"**: `session-items.ts` audit `alert:false`; `bottom-nav.tsx` — audyty nie
+  zasilają czerwonej plakietki; dashboard kafel „Audyty gotowe"; `generate-audit` prompt 1 pyt.
+  + framing wg rundy.
+- **Dev**: `force-audit-due` dostosowany (tworzy/cofa adaptacyjny pending).
+
+### Walidacja
+- `node --test lib/audits/intervals.test.ts` — 7/7 pass.
+- `npx tsc --noEmit` — clean. `npx eslint` (zmienione pliki) — clean. `npm run build` — OK
+  (trasa `/sessions/audit/run` obecna, `[audit_id]` usunięta).
+- **DO ZROBIENIA przez użytkownika**: zastosować migrację 0010 na Supabase; e2e ręcznie
+  (opanuj materiał → powstaje 1 pending audyt; `force-audit-due` na ≥4 materiałach → sesja
+  daje 3 pytania, reszta w kolejce; reschedule wg wyniku). Nie ruszano fiszek/FSRS, Deep Dive,
+  oceny, kalibracji, luk.
+
+---
+
 ## 2026-05-21 — Pipeline AI: migracja na tool use (eliminacja `JSON.parse` failures przy imporcie)
 
 ### Powód

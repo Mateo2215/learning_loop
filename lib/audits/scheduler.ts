@@ -12,13 +12,21 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { trackAICall } from "@/lib/ai/track";
 import { generateAuditQuestions } from "@/lib/ai/generate-audit";
+import { nextAuditInterval } from "@/lib/audits/intervals";
+import { computeSectionStatus } from "@/lib/sessions/section-status";
 import type { AuditTrigger, Category, Item, Material, TopicAudit } from "@/lib/db/types";
+
+/** Maks. liczba pytań w jednej skonsolidowanej sesji audytu (1 na materiał). */
+export const AUDIT_SESSION_SIZE = 3;
+
+const DAY_MS = 86_400_000;
 
 export interface DueAudit {
   id: string;
   material_id: string;
   material_title: string;
   trigger: AuditTrigger;
+  audit_round: number;
   scheduled_for: string;
 }
 
@@ -34,7 +42,7 @@ export async function getDueAudits(
   const nowIso = new Date().toISOString();
   const { data, error } = await supabase
     .from("topic_audits")
-    .select("id, material_id, trigger, scheduled_for, materials!inner(title)")
+    .select("id, material_id, trigger, audit_round, scheduled_for, materials!inner(title)")
     .eq("user_id", userId)
     .eq("status", "pending")
     .lte("scheduled_for", nowIso)
@@ -47,6 +55,7 @@ export async function getDueAudits(
     id: string;
     material_id: string;
     trigger: AuditTrigger;
+    audit_round: number;
     scheduled_for: string;
     materials: { title: string } | { title: string }[];
   };
@@ -59,6 +68,7 @@ export async function getDueAudits(
       material_id: r.material_id,
       material_title: mat?.title ?? "(materiał usunięty)",
       trigger: r.trigger,
+      audit_round: r.audit_round ?? 1,
       scheduled_for: r.scheduled_for,
     };
   });
@@ -139,6 +149,7 @@ export async function prepareAudit(
       generateAuditQuestions({
         category: material.category as Category,
         trigger: audit.trigger,
+        round: audit.audit_round ?? 1,
         compressedContent: material.content_compressed!,
         existingQuestions,
       }).then((r) => ({ result: r.result, usage: r.usage })),
@@ -175,4 +186,110 @@ export function evaluationToScore(ev: string | null): number {
   if (ev === "correct") return 1;
   if (ev === "partially_correct") return 0.5;
   return 0;
+}
+
+/**
+ * Wstawia pojedynczy pending audyt dla materiału, jeśli żaden jeszcze nie istnieje.
+ * Egzekwowane też przez unikalny indeks (topic_audits_one_pending_per_material) —
+ * ewentualną kolizję traktujemy jako no-op (true = utworzono, false = już był).
+ */
+async function createPendingAudit(
+  supabase: SupabaseClient,
+  userId: string,
+  materialId: string,
+  round: number,
+  scheduledForIso: string,
+): Promise<boolean> {
+  const { data: existing } = await supabase
+    .from("topic_audits")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("material_id", materialId)
+    .eq("status", "pending")
+    .maybeSingle();
+  if (existing) return false;
+
+  const { error } = await supabase.from("topic_audits").insert({
+    user_id: userId,
+    material_id: materialId,
+    scheduled_for: scheduledForIso,
+    trigger: "adaptive" as const,
+    audit_round: round,
+    status: "pending" as const,
+  });
+  // Kolizja na unikalnym indeksie = ktoś właśnie utworzył pending — to OK.
+  if (error && !/duplicate key|unique/i.test(error.message)) {
+    throw new Error(`createPendingAudit failed: ${error.message}`);
+  }
+  return !error;
+}
+
+/**
+ * Planuje kolejny audyt materiału po ukończonym audycie, z interwałem zależnym
+ * od wyniku (score 1–10). Wywoływane przy zamykaniu sesji audytu.
+ */
+export async function scheduleNextAudit(
+  supabase: SupabaseClient,
+  userId: string,
+  materialId: string,
+  completedRound: number,
+  score: number,
+): Promise<void> {
+  const { intervalDays, nextRound } = nextAuditInterval(completedRound, score);
+  const scheduledFor = new Date(Date.now() + intervalDays * DAY_MS).toISOString();
+  await createPendingAudit(supabase, userId, materialId, nextRound, scheduledFor);
+}
+
+/**
+ * Brama mastery: jeśli materiał jest opanowany (section status 'done') i nie ma
+ * jeszcze żadnego pending audytu, planuje pierwszy audyt (round 1, +7 dni).
+ * Idempotentne. Wywoływane po zamknięciu sesji Deep Dive.
+ */
+export async function scheduleFirstAuditIfMastered(
+  supabase: SupabaseClient,
+  userId: string,
+  materialId: string,
+): Promise<boolean> {
+  // Jeśli pending audyt już istnieje — nic nie rób.
+  const { data: existing } = await supabase
+    .from("topic_audits")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("material_id", materialId)
+    .eq("status", "pending")
+    .maybeSingle();
+  if (existing) return false;
+
+  // Pobierz pytania otwarte materiału (bez audit items) + ich najnowsze score'y.
+  const { data: openItems } = await supabase
+    .from("items")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("material_id", materialId)
+    .eq("type", "open")
+    .eq("is_suspended", false)
+    .is("audit_id", null);
+
+  const itemIds = (openItems ?? []).map((r) => (r as { id: string }).id);
+  if (itemIds.length === 0) return false;
+
+  const { data: reviewRows } = await supabase
+    .from("reviews")
+    .select("item_id, score, created_at")
+    .eq("user_id", userId)
+    .in("item_id", itemIds)
+    .order("created_at", { ascending: false });
+
+  const latestScore = new Map<string, number | null>();
+  for (const row of reviewRows ?? []) {
+    const r = row as { item_id: string; score: number | null };
+    if (!latestScore.has(r.item_id)) latestScore.set(r.item_id, r.score);
+  }
+
+  const latestScores = itemIds.map((id) => latestScore.get(id) ?? null);
+  const section = computeSectionStatus(latestScores);
+  if (section.status !== "done") return false;
+
+  const scheduledFor = new Date(Date.now() + 7 * DAY_MS).toISOString();
+  return createPendingAudit(supabase, userId, materialId, 1, scheduledFor);
 }

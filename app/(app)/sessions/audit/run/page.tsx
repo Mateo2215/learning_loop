@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, use } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -14,27 +14,23 @@ import { ScreenMessage } from "@/components/sessions/screen-message";
 import { SessionShell } from "@/components/sessions/session-shell";
 import { cn } from "@/lib/utils";
 
-interface OpenItem {
+interface AuditItem {
   id: string;
   material_id: string;
   type: "open";
   question: string;
   answer_reference: string | null;
   difficulty: "easy" | "medium" | "hard" | null;
-}
-
-interface AuditMeta {
-  id: string;
-  material_id: string;
   material_title: string;
-  trigger: "day_7" | "day_30" | "day_90" | "resurrection";
+  audit_id: string;
+  audit_round: number;
 }
 
 interface SessionStartResponse {
   session_id: string;
   started_at: string;
-  audit: AuditMeta;
-  items: OpenItem[];
+  items: AuditItem[];
+  queued_remaining: number;
 }
 
 interface AnswerResponse {
@@ -53,22 +49,14 @@ interface EndResponse {
 
 type Phase = "loading" | "conflict" | "answering" | "validating" | "feedback" | "done" | "error";
 
-const TRIGGER_LABEL: Record<AuditMeta["trigger"], string> = {
-  day_7: "Audyt po 7 dniach",
-  day_30: "Audyt po 30 dniach",
-  day_90: "Audyt po 90 dniach",
-  resurrection: "Powrót do tematu",
-};
-
-export default function AuditRunPage({ params }: { params: Promise<{ audit_id: string }> }) {
-  const { audit_id } = use(params);
+export default function AuditRunPage() {
   const router = useRouter();
 
   const [phase, setPhase] = useState<Phase>("loading");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
-  const [audit, setAudit] = useState<AuditMeta | null>(null);
-  const [items, setItems] = useState<OpenItem[]>([]);
+  const [items, setItems] = useState<AuditItem[]>([]);
+  const [queuedRemaining, setQueuedRemaining] = useState(0);
   const [index, setIndex] = useState(0);
   const [questionShownAt, setQuestionShownAt] = useState<number>(0);
   const [userAnswer, setUserAnswer] = useState("");
@@ -79,13 +67,18 @@ export default function AuditRunPage({ params }: { params: Promise<{ audit_id: s
 
   const startAudit = useCallback(async (force: boolean) => {
     setPhase("loading");
-    const result = await startSession<SessionStartResponse>({ mode: "audit", audit_id, force });
+    const result = await startSession<SessionStartResponse>({ mode: "audit", force });
     if (result.kind === "conflict") {
       setActiveConflict(result.active);
       setPhase("conflict");
       return;
     }
     if (result.kind === "error" || result.kind === "empty" || result.kind === "cap_reached") {
+      if (result.kind === "empty") {
+        setPhase("error");
+        setErrorMessage("Brak materiałów gotowych do audytu. Wróć tu, gdy któryś dojrzeje.");
+        return;
+      }
       setPhase("error");
       setErrorMessage(result.kind === "error" ? result.message : "Brak pytań w audycie.");
       return;
@@ -93,8 +86,8 @@ export default function AuditRunPage({ params }: { params: Promise<{ audit_id: s
     const data = result.data;
     setActiveConflict(null);
     setSessionId(data.session_id);
-    setAudit(data.audit);
     setItems(data.items);
+    setQueuedRemaining(data.queued_remaining ?? 0);
     setIndex(0);
     setQuestionShownAt(Date.now());
     if (data.items.length === 0) {
@@ -103,7 +96,7 @@ export default function AuditRunPage({ params }: { params: Promise<{ audit_id: s
     } else {
       setPhase("answering");
     }
-  }, [audit_id]);
+  }, []);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -189,7 +182,7 @@ export default function AuditRunPage({ params }: { params: Promise<{ audit_id: s
     setPhase("answering");
   }, [index, items.length, sessionId]);
 
-  if (phase === "loading") return <ScreenMessage title="Generuję świeże pytania audytowe…" description="AI dobiera pytania, których jeszcze nie widziałeś." />;
+  if (phase === "loading") return <ScreenMessage title="Generuję świeże pytania audytowe…" description="AI dobiera po jednym pytaniu z materiałów gotowych do sprawdzenia." />;
 
   if (phase === "conflict" && activeConflict) {
     return (
@@ -215,7 +208,7 @@ export default function AuditRunPage({ params }: { params: Promise<{ audit_id: s
         description={errorMessage ?? "Nieznany błąd."}
         action={
           <div className="flex gap-2">
-            <Button onClick={() => router.push("/sessions/audit")}>← Lista audytów</Button>
+            <Button onClick={() => router.push("/sessions/audit")}>← Audyty</Button>
             <Button variant="outline" onClick={() => router.push("/dashboard")}>Dashboard</Button>
           </div>
         }
@@ -224,18 +217,22 @@ export default function AuditRunPage({ params }: { params: Promise<{ audit_id: s
   }
 
   if (phase === "done") {
-    const scoreLabel =
-      auditScore === null
-        ? "—"
-        : `${Math.round(auditScore * 100)}%`;
+    const scoreLabel = auditScore === null ? "—" : `${Math.round(auditScore * 100)}%`;
+    const queueNote =
+      queuedRemaining > 0
+        ? `${queuedRemaining} ${queuedRemaining === 1 ? "materiał czeka" : "materiałów czeka"} w kolejce na kolejny audyt.`
+        : "Brak materiałów w kolejce — wszystko sprawdzone.";
     return (
       <ScreenMessage
         title={`Audyt zakończony · wynik ${scoreLabel}`}
-        description={audit ? `${TRIGGER_LABEL[audit.trigger]} · ${audit.material_title}` : undefined}
+        description={queueNote}
         action={
           <div className="flex gap-2">
-            <Button asChild>
-              <Link href="/sessions/audit">Inny audyt</Link>
+            {queuedRemaining > 0 && (
+              <Button onClick={() => void startAudit(false)}>Następny audyt</Button>
+            )}
+            <Button asChild variant={queuedRemaining > 0 ? "outline" : "default"}>
+              <Link href="/sessions/audit">Audyty</Link>
             </Button>
             <Button asChild variant="outline">
               <Link href="/dashboard">Dashboard</Link>
@@ -247,7 +244,7 @@ export default function AuditRunPage({ params }: { params: Promise<{ audit_id: s
   }
 
   const current = items[index];
-  if (!current || !audit) return null;
+  if (!current) return null;
 
   const progress = items.length === 0 ? 0 : Math.round((index / items.length) * 100);
 
@@ -257,7 +254,7 @@ export default function AuditRunPage({ params }: { params: Promise<{ audit_id: s
       meta={
         <>
           <span className="font-mono">{index + 1} / {items.length}</span>
-          <span className="truncate ml-3">{TRIGGER_LABEL[audit.trigger]} · {audit.material_title}</span>
+          <span className="truncate ml-3">Audyt · {current.material_title}</span>
         </>
       }
       bottom={

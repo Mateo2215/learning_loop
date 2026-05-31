@@ -17,19 +17,19 @@ const QuestionSchema = z.object({
 });
 
 const AuditOutputSchema = z.object({
-  questions: z.array(QuestionSchema).length(3),
+  questions: z.array(QuestionSchema).length(1),
 });
 
 const SUBMIT_AUDIT_TOOL: ToolDefinition = {
   name: "submit_audit_questions",
-  description: "Submit exactly 3 fresh, non-duplicate audit questions for the material.",
+  description: "Submit exactly 1 fresh, non-duplicate audit question for the material.",
   inputSchema: {
     type: "object",
     properties: {
       questions: {
         type: "array",
-        minItems: 3,
-        maxItems: 3,
+        minItems: 1,
+        maxItems: 1,
         items: {
           type: "object",
           properties: {
@@ -50,6 +50,8 @@ export type AuditQuestion = z.infer<typeof QuestionSchema>;
 export interface GenerateAuditInput {
   category: Category;
   trigger: AuditTrigger;
+  /** Numer audytu materiału (1, 2, 3, …) — steruje głębokością pytania. */
+  round: number;
   compressedContent: string;
   /** Existing question texts for this material — Sonnet must avoid duplicates. */
   existingQuestions: string[];
@@ -74,12 +76,12 @@ export async function generateAuditQuestions(
     "Pytania, które uczący się już widział (NIE powielaj):",
     existing,
     "",
-    "Wygeneruj dokładnie 3 nowe pytania audytowe w formacie JSON.",
+    "Wygeneruj dokładnie 1 nowe pytanie audytowe w formacie JSON.",
   ].join("\n");
 
   const out = await completeWithToolValidated({
     model: "claude-sonnet-4-6",
-    systemPrompt: buildGenerateAuditSystemPrompt(input.category, input.trigger),
+    systemPrompt: buildGenerateAuditSystemPrompt(input.category, input.trigger, input.round),
     userMessage,
     maxTokens: 1500,
     temperature: 0.7,

@@ -252,7 +252,7 @@ export default async function DashboardPage() {
             href="/sessions/review"
           />
           <KPICard
-            label="Audyty zaległe"
+            label="Audyty gotowe"
             number={formatPl(auditsDueCount ?? 0)}
             sub={<span className="text-accent">Zobacz audyty →</span>}
             href="/sessions/audit"

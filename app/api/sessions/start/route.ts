@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
-import { prepareAudit } from "@/lib/audits/scheduler";
+import { prepareAudit, getDueAudits, AUDIT_SESSION_SIZE } from "@/lib/audits/scheduler";
 import { isLeechRotationDue, pickLeechCandidates } from "@/lib/db/leeches";
 import { endActiveSessions, findActiveSession, type ActiveSession } from "@/lib/sessions/active-guard";
 import { capDeepDiveRoundSize, DEEP_DIVE_ROUND_SIZE } from "@/lib/sessions/deep-dive";
@@ -52,7 +52,7 @@ export async function POST(request: NextRequest) {
       { status: 400 }
     );
   }
-  const { mode, material_id, audit_id, item_count, device, force, shuffle, bypass_new_limit, focus_item_ids, force_replay } = parsed.data;
+  const { mode, material_id, item_count, device, force, shuffle, bypass_new_limit, focus_item_ids, force_replay } = parsed.data;
 
   if (mode === "deep_dive" && !material_id) {
     return NextResponse.json(
@@ -97,21 +97,63 @@ export async function POST(request: NextRequest) {
   if (existing && force) {
     await endActiveSessions(supabase, user.id);
   }
-  if (mode === "audit" && !audit_id) {
-    return NextResponse.json(
-      { error: "audit_id required for audit mode" },
-      { status: 400 }
-    );
-  }
-
-  // Audit mode: prepare items + return them. Each audit owns one session.
+  // Audit mode: skonsolidowana sesja. Bierzemy ≤AUDIT_SESSION_SIZE najstarszych
+  // zaległych audytów (1 na materiał — gwarantuje unikalny indeks pending),
+  // generujemy po 1 świeżym pytaniu i wpinamy wszystkie w jedną sesję.
   if (mode === "audit") {
-    let prepared;
+    let dueAll;
     try {
-      prepared = await prepareAudit(supabase, user.id, audit_id!);
+      // Pobierz większą pulę niż limit, żeby policzyć ile zostaje w kolejce.
+      dueAll = await getDueAudits(supabase, user.id, 50);
     } catch (err) {
-      const message = err instanceof Error ? err.message : "audit prepare failed";
+      const message = err instanceof Error ? err.message : "audit pool fetch failed";
       return NextResponse.json({ error: message }, { status: 500 });
+    }
+
+    if (dueAll.length === 0) {
+      return NextResponse.json({ error: "no_items_available" }, { status: 404 });
+    }
+
+    const pool = dueAll.slice(0, AUDIT_SESSION_SIZE);
+    const queuedRemaining = Math.max(0, dueAll.length - pool.length);
+
+    const auditItems: Array<{
+      id: string;
+      material_id: string;
+      type: "open";
+      question: string;
+      answer_reference: string | null;
+      difficulty: "easy" | "medium" | "hard" | null;
+      material_title: string;
+      audit_id: string;
+      audit_round: number;
+    }> = [];
+
+    for (const dueAudit of pool) {
+      try {
+        const prepared = await prepareAudit(supabase, user.id, dueAudit.id);
+        for (const it of prepared.items) {
+          auditItems.push({
+            id: it.id,
+            material_id: it.material_id,
+            type: "open",
+            question: it.question,
+            answer_reference: it.answer_reference,
+            difficulty: it.difficulty,
+            material_title: prepared.material.title,
+            audit_id: dueAudit.id,
+            audit_round: dueAudit.audit_round,
+          });
+        }
+      } catch (err) {
+        // Pojedynczy materiał może zawieść (np. brak treści) — pomijamy go,
+        // nie zawalając całej sesji.
+        console.warn(`[audit] prepare failed for ${dueAudit.id}:`, err);
+      }
+    }
+
+    if (auditItems.length === 0) {
+      return NextResponse.json({ error: "no_items_available" }, { status: 404 });
     }
 
     const { data: session, error: sessionErr } = await supabase
@@ -119,7 +161,7 @@ export async function POST(request: NextRequest) {
       .insert({
         user_id: user.id,
         mode: "audit",
-        items_planned: prepared.items.length,
+        items_planned: auditItems.length,
         device,
       })
       .select("id, started_at")
@@ -131,22 +173,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Link the audit to its session for traceability.
+    // Podłącz wszystkie audyty z puli do tej jednej sesji (traceability + rozliczenie).
+    const usedAuditIds = [...new Set(auditItems.map((i) => i.audit_id))];
     await supabase
       .from("topic_audits")
       .update({ session_id: session.id })
-      .eq("id", audit_id!);
+      .in("id", usedAuditIds);
 
     return NextResponse.json({
       session_id: session.id,
       started_at: session.started_at,
-      audit: {
-        id: prepared.audit.id,
-        material_id: prepared.material.id,
-        material_title: prepared.material.title,
-        trigger: prepared.audit.trigger,
-      },
-      items: prepared.items,
+      items: auditItems,
+      queued_remaining: queuedRemaining,
     });
   }
 

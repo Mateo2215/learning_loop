@@ -11,7 +11,7 @@ export interface SessionCounts {
   reviewsDue: number;
   /** Open questions available for Deep Dive (excludes audit-only items). */
   deepDiveAvailable: number;
-  /** Pending audits whose scheduled_for has passed (overdue). */
+  /** Materiały gotowe do audytu (pending, scheduled_for minął) — model „pull". */
   auditsDue: number;
   /** Knowledge gaps still open. */
   gapsOpen: number;

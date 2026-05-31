@@ -39,10 +39,9 @@ export const SESSION_NAV_ITEMS: SessionNavItem[] = [
   {
     href: "/sessions/audit",
     label: "Audyty",
-    description: "Zaplanowane głębokie sprawdzenia",
+    description: "Lekkie sprawdzenie zrozumienia — bez presji",
     Icon: ClipboardCheck,
     countKey: "auditsDue",
-    alert: true,
   },
   {
     href: "/gaps",

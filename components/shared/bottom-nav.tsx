@@ -72,7 +72,9 @@ export function BottomNav() {
   if (isSessionRunPath(pathname)) return null;
 
   const sessionsActive = SESSIONS_MATCH(pathname);
-  const badge = counts ? counts.auditsDue + counts.gapsOpen : 0;
+  // Audyty są „pull" (bez presji) — nie zasilają czerwonej plakietki alarmu.
+  // Ich licznik pokazuje się neutralnie w arkuszu wyboru sesji.
+  const badge = counts ? counts.gapsOpen : 0;
 
   return (
     <>
