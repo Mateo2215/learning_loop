@@ -5,11 +5,17 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { MASTERY_SCORE_THRESHOLD } from "@/lib/sessions/section-status";
 
 export interface SessionCounts {
   /** Cloze items due for review now (daily-new cap not applied here). */
   reviewsDue: number;
-  /** Open questions available for Deep Dive (excludes audit-only items). */
+  /**
+   * Open questions still worth a Deep Dive: latest AI score below the mastery
+   * threshold (weak) OR never answered (fresh). Mastered questions (≥7) are
+   * excluded — this mirrors what `selectDeepDiveItems` actually loads into a
+   * session, so the picker badge stops over-promising.
+   */
   deepDiveAvailable: number;
   /** Materiały gotowe do audytu (pending, scheduled_for minął) — model „pull". */
   auditsDue: number;
@@ -46,15 +52,7 @@ export async function getSessionCounts(
         .is("audit_id", null)
         .lte("fsrs_due_date", nowIso)
     ),
-    countOrZero(
-      supabase
-        .from("items")
-        .select("id", { count: "exact", head: true })
-        .eq("user_id", userId)
-        .eq("type", "open")
-        .eq("is_suspended", false)
-        .is("audit_id", null)
-    ),
+    countUnmasteredOpen(supabase, userId),
     countOrZero(
       supabase
         .from("topic_audits")
@@ -73,4 +71,48 @@ export async function getSessionCounts(
   ]);
 
   return { reviewsDue, deepDiveAvailable, auditsDue, gapsOpen };
+}
+
+/**
+ * Liczy pytania otwarte warte Deep Dive: niezaliczone (ostatni score < próg)
+ * lub nigdy nieoceniane. Nie da się tego wyrazić jednym COUNT-em (potrzebny
+ * „latest review per item"), więc robimy dwa lekkie zapytania i grupujemy w
+ * pamięci — skala to maks. kilkaset wierszy. Błąd degraduje do 0, jak reszta
+ * liczników w nawigacji.
+ */
+async function countUnmasteredOpen(
+  supabase: SupabaseClient,
+  userId: string
+): Promise<number> {
+  const { data: itemRows, error: itemErr } = await supabase
+    .from("items")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("type", "open")
+    .eq("is_suspended", false)
+    .is("audit_id", null);
+  if (itemErr || !itemRows || itemRows.length === 0) return 0;
+
+  const itemIds = (itemRows as { id: string }[]).map((r) => r.id);
+
+  const { data: reviewRows, error: reviewErr } = await supabase
+    .from("reviews")
+    .select("item_id, score, created_at")
+    .eq("user_id", userId)
+    .in("item_id", itemIds)
+    .order("created_at", { ascending: false });
+  if (reviewErr) return 0;
+
+  // Najnowszy score per item (wiersze już posortowane DESC).
+  const latestScore = new Map<string, number | null>();
+  for (const row of (reviewRows ?? []) as { item_id: string; score: number | null }[]) {
+    if (!latestScore.has(row.item_id)) latestScore.set(row.item_id, row.score);
+  }
+
+  let unmastered = 0;
+  for (const id of itemIds) {
+    const score = latestScore.get(id) ?? null; // brak review = fresh
+    if (score === null || score < MASTERY_SCORE_THRESHOLD) unmastered += 1;
+  }
+  return unmastered;
 }

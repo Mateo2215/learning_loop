@@ -459,7 +459,9 @@ function CalibrationButtons({
   return (
     <div className="space-y-2">
       <div className="text-xs text-muted">
-        {picked ? "Dziękuję — kalibracja zapisana" : "Czy ocena AI była trafna?"}
+        {picked
+          ? "Zapisano. Wpłynie na oceny po przeliczeniu (codzienny cron lub „Przelicz teraz” w Ustawieniach), nie od razu."
+          : "Czy ocena AI była trafna?"}
       </div>
       <div className="grid grid-cols-3 gap-2">
         {cell("too_strict", "Surowo", AlertTriangle)}

@@ -83,8 +83,13 @@ export default async function MaterialDetailPage({
       kind: i.tags?.[0] ?? i.difficulty ?? undefined,
     }));
 
-  const segments = computeSegments(itemList);
-  const masteredPct = computePct(segments, itemList.length);
+  // Słupek opanowania dotyczy tylko fiszek cloze (mają FSRS stability).
+  // Pytania otwarte mają osobny model statusu w Deep Dive — nie wliczamy ich,
+  // żeby nie pojawiały się sztucznie jako „New".
+  const clozeCount = cloze.length;
+  const openCount = openItems.length;
+  const segments = computeSegments(itemList.filter((i) => i.type === "cloze"));
+  const masteredPct = computePct(segments, clozeCount);
 
   let suggestedGap: { id: string; title: string | null } | null = null;
   if (m.suggested_gap_id) {
@@ -218,7 +223,10 @@ export default async function MaterialDetailPage({
               </Chip>
             ))}
             <Chip variant="default">{formatDate(m.imported_at)}</Chip>
-            <Chip variant="accent">{itemList.length} pytań</Chip>
+            <Chip variant="accent">
+              {clozeCount} {pluralFiszki(clozeCount)}
+              {openCount > 0 && ` · ${openCount} ${pluralPytania(openCount)}`}
+            </Chip>
           </div>
           <div className="mb-6">
             <MetadataEdit
@@ -232,7 +240,7 @@ export default async function MaterialDetailPage({
           <div className="max-w-xl">
             <MasteryBar
               segments={segments}
-              total={itemList.length}
+              total={clozeCount}
               showLegend
             />
             <div className="mt-3 font-mono text-[11px] uppercase tracking-[0.15em] text-muted">
@@ -260,6 +268,24 @@ export default async function MaterialDetailPage({
       />
     </div>
   );
+}
+
+/** Polska odmiana: 1 fiszka, 2-4 fiszki, 5+ fiszek (z wyjątkiem nastek). */
+function pluralFiszki(n: number): string {
+  if (n === 1) return "fiszka";
+  const d = n % 10;
+  const t = n % 100;
+  if (d >= 2 && d <= 4 && (t < 12 || t > 14)) return "fiszki";
+  return "fiszek";
+}
+
+/** Polska odmiana: 1 pytanie, 2-4 pytania, 5+ pytań (z wyjątkiem nastek). */
+function pluralPytania(n: number): string {
+  if (n === 1) return "pytanie";
+  const d = n % 10;
+  const t = n % 100;
+  if (d >= 2 && d <= 4 && (t < 12 || t > 14)) return "pytania";
+  return "pytań";
 }
 
 function formatDate(iso: string): string {

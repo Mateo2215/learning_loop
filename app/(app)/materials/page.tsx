@@ -42,20 +42,23 @@ export default async function MaterialsPage({
   const { data: materials, error } = await query;
 
   // Pobierz wszystkie items dla widocznych materiałów, żeby policzyć segmenty.
+  // Słupek opanowania dotyczy WYŁĄCZNIE fiszek cloze (mają FSRS stability).
+  // Pytania otwarte (type='open') nie mają FSRS — trzymamy je osobno, żeby nie
+  // zaniżały słupka jako sztuczne „New".
   const ids = (materials ?? []).map((m) => m.id);
   const itemsByMaterial = new Map<
     string,
-    Array<{ stability: number | null }>
+    Array<{ stability: number | null; type: string }>
   >();
   if (ids.length > 0) {
     const { data: itemRows } = await supabase
       .from("items")
-      .select("material_id, fsrs_stability")
+      .select("material_id, fsrs_stability, type")
       .in("material_id", ids);
     for (const row of itemRows ?? []) {
-      const r = row as { material_id: string; fsrs_stability: number | null };
+      const r = row as { material_id: string; fsrs_stability: number | null; type: string };
       const list = itemsByMaterial.get(r.material_id) ?? [];
-      list.push({ stability: r.fsrs_stability });
+      list.push({ stability: r.fsrs_stability, type: r.type });
       itemsByMaterial.set(r.material_id, list);
     }
   }
@@ -139,7 +142,9 @@ export default async function MaterialsPage({
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {rows.map((m) => {
                   const items = itemsByMaterial.get(m.id) ?? [];
-                  const segments = computeSegments(items);
+                  const clozeItems = items.filter((i) => i.type === "cloze");
+                  const openCount = items.length - clozeItems.length;
+                  const segments = computeSegments(clozeItems);
                   const stale = isStale(m.imported_at, nowMs);
                   return (
                     <MaterialCard
@@ -149,7 +154,8 @@ export default async function MaterialsPage({
                       category={m.category}
                       tags={m.tags ?? []}
                       importedAt={m.imported_at}
-                      itemsTotal={items.length}
+                      clozeTotal={clozeItems.length}
+                      openTotal={openCount}
                       segments={segments}
                       status={m.status}
                       isStale={stale}
@@ -245,6 +251,7 @@ function computeSegments(items: { stability: number | null }[]): {
   learning: number;
   new: number;
 } {
+  // Wołane już tylko z fiszkami cloze — open questions są odfiltrowane wcześniej.
   const seg = { mature: 0, young: 0, learning: 0, new: 0 };
   for (const it of items) {
     const s = it.stability;
