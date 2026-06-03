@@ -19,7 +19,6 @@ const ACTIVE_STATUSES = new Set<SectionStatus>([
   "fresh",
   "in_progress",
   "needs_followup",
-  "below_threshold",
 ]);
 
 interface MaterialOption {
@@ -284,8 +283,6 @@ function renderSectionMeta(section: SectionStats, leechCount: number): string {
       return `${section.avg?.toFixed(1) ?? "—"} śr · ${section.below_floor_count} poniżej 6${leech}`;
     case "done":
       return `${section.avg?.toFixed(1) ?? "—"} śr · ✓ zaliczone`;
-    case "below_threshold":
-      return `${section.avg?.toFixed(1) ?? "—"} śr · ${section.weak_count} do podciągnięcia${leech}`;
   }
 }
 

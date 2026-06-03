@@ -18,8 +18,7 @@ export type PreviewSectionStatus =
   | "fresh"
   | "in_progress"
   | "needs_followup"
-  | "done"
-  | "below_threshold";
+  | "done";
 
 export interface PreviewStats {
   total_open: number;
@@ -62,10 +61,12 @@ export function DeepDivePreview({
     }
   }, [material.id]);
 
-  // Liczba pytań w następnej rundzie = liczba weak + fresh (mastered pomijane).
-  // Dla `done` sekcji to 0 — user zobaczy CTA "Powtórz wszystko".
+  // Liczba pytań w następnej rundzie = pytania <6 + świeże (nieodpowiedziane).
+  // Dokładnie to, co serwuje selectDeepDiveItems. Dla `done` to 0 — user
+  // zobaczy CTA "Powtórz wszystko".
   const isDone = stats.section_status === "done";
-  const queueSize = stats.weak_count + (stats.total_open - stats.mastered - stats.weak_count);
+  const freshCount = stats.total_open - stats.mastered - stats.weak_count;
+  const queueSize = stats.below_floor_count + freshCount;
   const roundCount = isDone ? Math.min(stats.total_open, roundSize) : Math.min(queueSize, roundSize);
 
   return (
@@ -304,24 +305,6 @@ function MasteryHero({
     );
   }
 
-  if (sectionStatus === "below_threshold") {
-    return (
-      <div>
-        <div className="font-mono text-[10px] uppercase tracking-[0.15em] text-warn mb-2">
-          Poniżej progu
-        </div>
-        <div className="font-serif text-[24px] leading-tight tracking-[-0.01em] text-fg">
-          średnia &lt; 7
-        </div>
-        <ProgressBar mastered={mastered} total={total} />
-        <div className="font-mono text-[11px] text-muted mt-2">
-          {lastLabel}
-          {leechSuffix}
-        </div>
-      </div>
-    );
-  }
-
   // sectionStatus === "in_progress"
   return (
     <div>
@@ -335,7 +318,7 @@ function MasteryHero({
         <span className="font-serif text-[18px] text-muted">/{total}</span>
         <span
           className="ml-2 font-mono text-[11px] uppercase tracking-wide text-subtle underline decoration-dotted underline-offset-2 cursor-help"
-          title="Pytanie opanowane = ostatni score AI ≥ 7. Słabe = ≤6, wraca do powtórki."
+          title="Pytanie opanowane = ostatni score AI ≥ 7. Do powtórki w Deep Dive wracają tylko pytania poniżej 6 oraz nieodpowiedziane."
         >
           opanowane
         </span>

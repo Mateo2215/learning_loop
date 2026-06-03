@@ -4,6 +4,39 @@ Session handoff log. Most recent entry on top. Keep this file under 200 lines.
 
 ---
 
+## 2026-06-03 (2) — Deep Dive: kolejka tylko <6 + świeże; brama bez średniej
+
+### Powód
+Użytkownik chce, by Deep Dive serwował WYŁĄCZNIE pytania <6 i nieodpowiedziane
+(szóstki = akceptowalne, nie nagabują). Licznik pokazywał 34 zamiast oczekiwanych 22.
+Konsekwencja: wymóg średniej ≥7 w bramie kolidował z taką kolejką (materiał z samymi
+≥6 i śr <7 nie miałby czego ćwiczyć → pułapka). Decyzja użytkownika: usunąć wymóg
+średniej. Nowa brama `done` = wszystkie odpowiedziane I żadne <6.
+
+### Zmiana
+- **`lib/db/counts.ts`**: `countUnmasteredOpen` liczy płasko score <6 lub fresh
+  (`SECTION_FLOOR_THRESHOLD`). Badge „Deep Dive" = pytania <6 + nieodpowiedziane.
+- **`app/api/sessions/start/route.ts`** (`selectDeepDiveItems`): kolejka serwuje <6 + fresh
+  (próg z `SECTION_FLOOR_THRESHOLD`, import z section-status zamiast hardkodu 7).
+- **`lib/sessions/section-status.ts`**: usunięty wymóg średniej i status `below_threshold`;
+  usunięta stała `SECTION_AVG_THRESHOLD`. Brama: fresh → in_progress → needs_followup (<6)
+  → done. `weak_count`/`MASTERY_SCORE_THRESHOLD=7` zostają tylko dla display + leech.
+- **`components/sessions/deep-dive-preview.tsx`**: usunięty `below_threshold`; `queueSize`
+  liczy `below_floor_count + fresh`; poprawiony tooltip („do powtórki wracają <6 i świeże").
+- **`app/(app)/sessions/deep-dive/page.tsx`**: `ACTIVE_STATUSES` i `renderSectionMeta` bez
+  `below_threshold`.
+- **`lib/sessions/section-status.test.ts`**: testy dostosowane do nowej bramy.
+- **`CLAUDE.md`**: zaktualizowana sekcja bramy (brama + kolejka + licznik = ten sam próg 6).
+
+### Walidacja
+- `node --test` — 17/17. `npx tsc --noEmit` — clean. Grep: zero osieroconych referencji
+  do `below_threshold`/`SECTION_AVG_THRESHOLD`.
+- **Spójność**: brama, kolejka i licznik używają teraz jednego progu (6). Brak pułapki —
+  needs_followup serwuje swoje <6, po poprawie → done.
+- UI weryfikuje użytkownik sam.
+
+---
+
 ## 2026-06-03 — Deep Dive: złagodzenie bramy zaliczania (podłoga 6 + średnia 7)
 
 ### Powód

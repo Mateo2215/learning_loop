@@ -2,10 +2,11 @@
  * Testy bramy zaliczenia materiału (computeSectionStatus).
  * Uruchom: node --test lib/sessions/section-status.test.ts (Node ≥22 strip-types).
  *
- * Reguła zaliczenia: średnia ≥7 ORAZ żadne pytanie poniżej 6.
- *   - jakieś pytanie <6           → needs_followup (twarda luka)
- *   - wszystkie ≥6 i średnia ≥7   → done
- *   - wszystkie ≥6 i średnia <7   → below_threshold
+ * Reguła zaliczenia: WSZYSTKIE pytania odpowiedziane ORAZ żadne poniżej 6.
+ *   - nic nieocenione            → fresh
+ *   - część nieocenionych        → in_progress
+ *   - wszystkie ocenione, jakieś <6 → needs_followup
+ *   - wszystkie ocenione, żadne <6  → done (średnia nie bramkuje)
  */
 
 import { test } from "node:test";
@@ -24,11 +25,17 @@ test("część nieocenionych → in_progress", () => {
   assert.equal(computeSectionStatus([8, null, 7]).status, "in_progress");
 });
 
-test("wszystkie ≥6 i średnia ≥7 → done (szóstka nie blokuje)", () => {
+test("wszystkie ≥6, niska średnia → done (średnia nie bramkuje)", () => {
+  const s = computeSectionStatus([6, 6, 6]);
+  assert.equal(s.status, "done");
+  assert.equal(s.below_floor_count, 0);
+  assert.equal(s.avg, 6); // średnia <7, a i tak zaliczone — żadne <6
+});
+
+test("szóstka nie blokuje zaliczenia", () => {
   const s = computeSectionStatus([6, 7, 7, 8, 8]);
   assert.equal(s.status, "done");
   assert.equal(s.below_floor_count, 0);
-  assert.equal(s.avg, 7.2);
 });
 
 test("klasyczny komplet siódemek → done", () => {
@@ -39,30 +46,26 @@ test("pytanie poniżej 6 → needs_followup, mimo wysokiej średniej", () => {
   const s = computeSectionStatus([5, 8, 8, 8, 8]);
   assert.equal(s.status, "needs_followup");
   assert.equal(s.below_floor_count, 1);
-  assert.equal(s.avg, 7.4); // średnia ≥7, a i tak nie 'done' (luka <6 wygrywa)
+  assert.equal(s.avg, 7.4); // wysoka średnia nie maskuje luki <6
 });
 
-test("wszystkie ≥6, ale średnia <7 → below_threshold (osiągalny po zmianie)", () => {
-  const s = computeSectionStatus([6, 6, 6, 7, 7]);
-  assert.equal(s.status, "below_threshold");
-  assert.equal(s.below_floor_count, 0);
-  assert.equal(s.avg, 6.4);
+test("kilka pytań <6 → needs_followup, below_floor_count je liczy", () => {
+  const s = computeSectionStatus([3, 5, 6, 7, 9]);
+  assert.equal(s.status, "needs_followup");
+  assert.equal(s.below_floor_count, 2); // 3 i 5
 });
 
-test("same szóstki → below_threshold (średnia 6 <7, brak luki <6)", () => {
-  const s = computeSectionStatus([6, 6, 6]);
-  assert.equal(s.status, "below_threshold");
-  assert.equal(s.below_floor_count, 0);
+test("luka <6 wśród nieukończonych → najpierw in_progress (nie needs_followup)", () => {
+  // Materiał niedokończony nie przechodzi w needs_followup, dopóki wszystkie
+  // pytania nie zostaną ocenione.
+  assert.equal(computeSectionStatus([5, null, 8]).status, "in_progress");
 });
 
-test("weak_count nadal liczy <7 (pytania wracające do powtórki)", () => {
-  // 6 i 6 są weak (<7) choć ≥ podłogi; służą do podniesienia średniej.
+test("weak_count nadal liczy <7 (display 'opanowane'), niezależnie od bramy", () => {
+  // 6 i 6 są weak (<7) ale ≥ podłogi — nie blokują i nie wracają do Deep Dive.
   const s = computeSectionStatus([6, 6, 8, 9, 9]);
   assert.equal(s.weak_count, 2);
   assert.equal(s.below_floor_count, 0);
-  assert.equal(s.status, "done"); // średnia 7.6
-});
-
-test("granica: dokładnie średnia 7 → done", () => {
-  assert.equal(computeSectionStatus([6, 7, 8]).status, "done"); // avg = 7
+  assert.equal(s.mastered_count, 3);
+  assert.equal(s.status, "done");
 });

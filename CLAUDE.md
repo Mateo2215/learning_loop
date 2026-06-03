@@ -411,15 +411,13 @@ if (monthlyTotal >= HARD_LIMIT && isNonCritical(operation)) {
 
 Logika w `lib/sessions/section-status.ts` (`computeSectionStatus`, czysta funkcja — jedyne źródło prawdy; konsumenci: selektor Deep Dive, preview, `scheduleFirstAuditIfMastered`).
 
-**Reguła zaliczenia (status `done`)**: ostatni score AI każdego pytania otwartego ≥ **podłogi 6** ORAZ **średnia ≥ 7**. To dwa rozdzielone progi:
-- `SECTION_FLOOR_THRESHOLD = 6` — twarda podłoga. Pytanie <6 → status `needs_followup` (blokuje zaliczenie niezależnie od średniej).
-- `SECTION_AVG_THRESHOLD = 7` — wszystkie pytania ≥6, ale średnia <7 → status `below_threshold` (domiel szóstki do siódemek).
+**Reguła zaliczenia (status `done`)**: WSZYSTKIE pytania otwarte odpowiedziane ORAZ żadne poniżej **podłogi 6**. Średnia jest tylko informacją — NIE bramkuje.
+- `SECTION_FLOOR_THRESHOLD = 6` — twarda podłoga. Pytanie <6 → `needs_followup`. Szóstka (≥6) jest akceptowalna.
+- Statusy sekcji: `fresh` (nic ocenione) → `in_progress` (część) → `needs_followup` (wszystko ocenione, jakieś <6) → `done` (wszystko ocenione, żadne <6).
 
-**Dlaczego dwa progi vs jeden (historycznie było „każde pytanie ≥7"):** szóstka nie powinna w nieskończoność blokować materiału, ale średnia musi być solidna. Audyt długoterminowy planuje się dopiero po `done`.
+**Kolejka Deep Dive musi być spójna z podłogą:** `selectDeepDiveItems` (`app/api/sessions/start/route.ts`) i licznik `countUnmasteredOpen` (`lib/db/counts.ts`) serwują/liczą TYLKO pytania <6 i świeże (nieodpowiedziane). Szóstki nie wracają do powtórki. Dlatego brama nie może wymagać średniej ≥7 — inaczej materiał z samymi ≥6 i śr <7 utknąłby (nic do zaserwowania). Te trzy miejsca (brama, kolejka, licznik) zmieniaj razem.
 
-**Próg pojedynczego pytania zostaje na 7 (NIE obniżać do 6):**
-- `MASTERY_SCORE_THRESHOLD = 7` — „opanowane" (display) + leech.
-- Kolejka Deep Dive (`selectDeepDiveItems` w `app/api/sessions/start/route.ts`) serwuje pytania <7. To celowe: gwarantuje, że `below_threshold` (są pytania <7, choć ≥6) zawsze ma co serwować do powtórki — inaczej powstałby martwy zaułek (same szóstki → pusta sesja → nie da się podnieść średniej).
+**Próg pojedynczego pytania (display) zostaje na 7:** `MASTERY_SCORE_THRESHOLD = 7` — „opanowane" vs „słabe" w pasku postępu + leech detection. Niezależny od bramy i kolejki.
 
 `AUDIT_GOOD_SCORE = 7` (drabina interwałów audytu) jest niezależny od bramy zaliczania.
 

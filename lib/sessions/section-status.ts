@@ -6,16 +6,14 @@
  * Leech detection: 3 ostatnie reviews z score <7 → is_leech=true,
  * ostatnie review ≥7 → is_leech=false (auto-reset).
  *
- * Brama zaliczenia materiału rozdziela DWA progi:
- *   - SECTION_FLOOR_THRESHOLD (6): żadne pytanie nie może być poniżej — twarda
- *     luka (score <6) blokuje zaliczenie (needs_followup).
- *   - SECTION_AVG_THRESHOLD (7): średnia musi sięgnąć tego poziomu (done).
- * Materiał ze wszystkimi pytaniami ≥6, ale średnią <7 → below_threshold
- * (domiel szóstki do siódemek; pytania <7 dalej wracają do powtórki).
+ * Brama zaliczenia materiału (status 'done'): WSZYSTKIE pytania odpowiedziane
+ * ORAZ żadne poniżej twardej podłogi SECTION_FLOOR_THRESHOLD (6). Pytanie <6
+ * → needs_followup. Średnia jest tylko informacją (nie bramkuje).
+ * Spójne z kolejką Deep Dive, która serwuje wyłącznie pytania <6 i świeże —
+ * szóstka (≥ podłogi) jest akceptowalna i nie wraca do powtórki.
  *
  * MASTERY_SCORE_THRESHOLD (7) pozostaje progiem „opanowania" pojedynczego
- * pytania (display) i — niezależnie — progiem kolejki Deep Dive: pytania <7
- * wracają do powtórki, dzięki czemu da się podnieść średnią z below_threshold.
+ * pytania (display: opanowane vs słabe) i leech detection — niezależnie od bramy.
  *
  * Wszystko jako czyste funkcje — bez I/O, łatwe do testowania.
  */
@@ -26,13 +24,10 @@ export type SectionStatus =
   | "fresh"
   | "in_progress"
   | "needs_followup"
-  | "done"
-  | "below_threshold";
+  | "done";
 
 export const MASTERY_SCORE_THRESHOLD = 7;
-/** Średnia wymagana do zaliczenia materiału (status 'done'). */
-export const SECTION_AVG_THRESHOLD = 7;
-/** Twarda podłoga: pytanie poniżej tego progu blokuje zaliczenie. */
+/** Twarda podłoga: pytanie poniżej tego progu blokuje zaliczenie (i wraca do Deep Dive). */
 export const SECTION_FLOOR_THRESHOLD = 6;
 export const LEECH_FAILURE_THRESHOLD = 3;
 
@@ -73,21 +68,16 @@ export function computeSectionStatus(latestScores: Array<number | null>): Sectio
   const avg = scored > 0 ? scoredValues.reduce((a, b) => a + b, 0) / scored : null;
 
   let status: SectionStatus;
-  if (total === 0) {
-    status = "fresh";
-  } else if (scored === 0) {
+  if (scored === 0) {
     status = "fresh";
   } else if (scored < total) {
     status = "in_progress";
   } else if (below_floor_count > 0) {
-    // Twarda luka: jakieś pytanie poniżej podłogi 6 → wymaga poprawy,
-    // niezależnie od średniej.
+    // Twarda luka: jakieś pytanie poniżej podłogi 6 → wymaga poprawy.
     status = "needs_followup";
-  } else if (avg !== null && avg >= SECTION_AVG_THRESHOLD) {
-    status = "done";
   } else {
-    // Wszystkie pytania ≥6, ale średnia <7 — domiel szóstki do siódemek.
-    status = "below_threshold";
+    // Wszystkie odpowiedziane i żadne <6 → zaliczone.
+    status = "done";
   }
 
   return { status, total, scored, weak_count, below_floor_count, mastered_count, new_count, avg };

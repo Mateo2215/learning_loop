@@ -5,17 +5,15 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { computeSectionStatus } from "@/lib/sessions/section-status";
+import { SECTION_FLOOR_THRESHOLD } from "@/lib/sessions/section-status";
 
 export interface SessionCounts {
   /** Cloze items due for review now (daily-new cap not applied here). */
   reviewsDue: number;
   /**
-   * Open questions still worth a Deep Dive, liczone per-materiał: pomijamy
-   * materiały zaliczone (section status 'done'), a w pozostałych liczymy pytania
-   * <7 (weak) lub nigdy nieoceniane (fresh). To dokładnie to, co zaserwowałaby
-   * sesja Deep Dive w aktywnych materiałach — badge nie wlicza już „akceptowalnych"
-   * szóstek tkwiących w materiałach zaliczonych (śr ≥7, ale z pytaniem 6).
+   * Open questions still worth a Deep Dive: ostatni score AI poniżej twardej
+   * podłogi (<6) LUB nigdy nieoceniane (fresh). Dokładnie to, co serwuje
+   * `selectDeepDiveItems`. Szóstki (akceptowalne, ≥ podłogi) nie nagabują.
    */
   deepDiveAvailable: number;
   /** Materiały gotowe do audytu (pending, scheduled_for minął) — model „pull". */
@@ -75,12 +73,11 @@ export async function getSessionCounts(
 }
 
 /**
- * Liczy pytania otwarte warte Deep Dive, per-materiał. Materiał zaliczony
- * (section status 'done') wnosi 0; w pozostałych liczymy pytania <7 lub fresh
- * (dokładnie kolejka Deep Dive). Nie da się tego wyrazić jednym COUNT-em
- * (potrzebny „latest review per item" + status sekcji), więc robimy dwa lekkie
- * zapytania, grupujemy per-materiał i agregujemy w pamięci — skala to maks.
- * kilkaset wierszy. Błąd degraduje do 0, jak reszta liczników w nawigacji.
+ * Liczy pytania otwarte warte Deep Dive: ostatni score <6 (poniżej podłogi)
+ * lub nigdy nieoceniane. Nie da się tego wyrazić jednym COUNT-em (potrzebny
+ * „latest review per item"), więc robimy dwa lekkie zapytania i grupujemy w
+ * pamięci — skala to maks. kilkaset wierszy. Błąd degraduje do 0, jak reszta
+ * liczników w nawigacji.
  */
 async function countUnmasteredOpen(
   supabase: SupabaseClient,
@@ -88,15 +85,14 @@ async function countUnmasteredOpen(
 ): Promise<number> {
   const { data: itemRows, error: itemErr } = await supabase
     .from("items")
-    .select("id, material_id")
+    .select("id")
     .eq("user_id", userId)
     .eq("type", "open")
     .eq("is_suspended", false)
     .is("audit_id", null);
   if (itemErr || !itemRows || itemRows.length === 0) return 0;
 
-  const items = itemRows as { id: string; material_id: string }[];
-  const itemIds = items.map((r) => r.id);
+  const itemIds = (itemRows as { id: string }[]).map((r) => r.id);
 
   const { data: reviewRows, error: reviewErr } = await supabase
     .from("reviews")
@@ -112,20 +108,10 @@ async function countUnmasteredOpen(
     if (!latestScore.has(row.item_id)) latestScore.set(row.item_id, row.score);
   }
 
-  // Grupujemy najnowsze score'y per materiał, żeby wyliczyć status sekcji.
-  const byMaterial = new Map<string, Array<number | null>>();
-  for (const it of items) {
-    const arr = byMaterial.get(it.material_id) ?? [];
-    arr.push(latestScore.get(it.id) ?? null); // brak review = fresh
-    byMaterial.set(it.material_id, arr);
-  }
-
   let available = 0;
-  for (const scores of byMaterial.values()) {
-    const section = computeSectionStatus(scores);
-    if (section.status === "done") continue; // zaliczony materiał nie nagabuje
-    // weak (<7) + fresh — to co realnie zaserwuje selectDeepDiveItems.
-    available += section.weak_count + section.new_count;
+  for (const id of itemIds) {
+    const score = latestScore.get(id) ?? null; // brak review = fresh
+    if (score === null || score < SECTION_FLOOR_THRESHOLD) available += 1;
   }
   return available;
 }

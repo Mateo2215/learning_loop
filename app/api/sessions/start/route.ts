@@ -5,6 +5,7 @@ import { prepareAudit, getDueAudits, AUDIT_SESSION_SIZE } from "@/lib/audits/sch
 import { isLeechRotationDue, pickLeechCandidates } from "@/lib/db/leeches";
 import { endActiveSessions, findActiveSession, type ActiveSession } from "@/lib/sessions/active-guard";
 import { capDeepDiveRoundSize, DEEP_DIVE_ROUND_SIZE } from "@/lib/sessions/deep-dive";
+import { SECTION_FLOOR_THRESHOLD } from "@/lib/sessions/section-status";
 import { previewIntervals, type IntervalPreview } from "@/lib/fsrs/scheduler";
 import type { Item } from "@/lib/db/types";
 
@@ -580,18 +581,16 @@ async function selectDeepDiveItems(
     return [...focusOrdered, ...[...rest].sort(sortByStaleness)].slice(0, limit);
   }
 
-  // Default: priorytet weak (latest_score ≤6) → fresh (nigdy nie pytane),
-  // pomijamy mastered (≥7). Materiał z section_status='done' da pustą sesję,
-  // która w UI wyświetla "empty" — taki materiał normalnie nie pojawia się
-  // w aktywnym selektorze.
-  const MASTERY_THRESHOLD = 7;
+  // Default: priorytet pytania poniżej podłogi (latest_score <6) → fresh
+  // (nigdy nie pytane), pomijamy pytania ≥6 (akceptowalne). Materiał bez
+  // pytań <6 i bez świeżych da pustą sesję ("empty" w UI).
   const enriched = items.map((item) => ({
     item,
     score: latestReviewByItem.get(item.id)?.score ?? null,
   }));
 
   const weak = enriched
-    .filter((e) => e.score !== null && e.score < MASTERY_THRESHOLD)
+    .filter((e) => e.score !== null && e.score < SECTION_FLOOR_THRESHOLD)
     .sort((a, b) => (a.score ?? 0) - (b.score ?? 0)); // najgorsze najpierw
 
   const fresh = enriched
