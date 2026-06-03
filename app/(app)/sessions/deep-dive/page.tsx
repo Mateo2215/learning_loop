@@ -206,6 +206,7 @@ export default async function DeepDiveSelectorPage({
               <ul className="space-y-2">
                 {enriched.map((m) => {
                   const isSelected = previewId === m.id;
+                  const isDone = m.section.status === "done";
                   return (
                     <li key={m.id}>
                       <Link
@@ -216,6 +217,8 @@ export default async function DeepDiveSelectorPage({
                             ? "border-accent/60 bg-accent-soft/40"
                             : activeDeepDive?.material_id === m.id
                             ? "border-accent/60 hover:border-line-strong"
+                            : isDone
+                            ? "border-ok/50 hover:border-ok"
                             : "border-line hover:border-line-strong"
                         }`}
                       >
@@ -223,6 +226,11 @@ export default async function DeepDiveSelectorPage({
                           <Chip variant="default" size="sm">
                             {CATEGORY_LABELS[m.category]}
                           </Chip>
+                          {isDone && (
+                            <span className="font-mono text-[10px] uppercase tracking-wide text-ok">
+                              ✓ Zaliczone
+                            </span>
+                          )}
                           {activeDeepDive?.material_id === m.id && (
                             <span className="font-mono text-[10px] uppercase tracking-wide text-accent">
                               Kontynuuj
