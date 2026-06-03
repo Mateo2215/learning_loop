@@ -13,7 +13,11 @@
 /** Drabina interwałów w dniach. Sukces wspina się wyżej, porażka spada. */
 export const AUDIT_INTERVAL_LADDER = [7, 21, 60, 150, 365] as const;
 
-/** Próg „dobrej" odpowiedzi (spójny z MASTERY_SCORE_THRESHOLD). */
+/**
+ * Próg „dobrej" odpowiedzi audytowej. Niezależny od bramy zaliczenia materiału
+ * (section-status) — dotyczy pojedynczej odpowiedzi audytowej i decyduje tylko
+ * o awansie/spadku na drabinie interwałów.
+ */
 export const AUDIT_GOOD_SCORE = 7;
 /** Górna granica odpowiedzi „słabej". */
 export const AUDIT_POOR_SCORE = 3;

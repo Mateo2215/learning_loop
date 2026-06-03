@@ -4,6 +4,43 @@ Session handoff log. Most recent entry on top. Keep this file under 200 lines.
 
 ---
 
+## 2026-06-03 — Deep Dive: złagodzenie bramy zaliczania (podłoga 6 + średnia 7)
+
+### Powód
+Stara reguła `done` wymagała ostatniego score ≥7 dla KAŻDEGO pytania (a wtedy średnia
+automatycznie ≥7, więc stan `below_threshold` był martwym kodem). Zbyt rygorystyczne —
+pojedyncza uparta szóstka blokowała materiał w nieskończoność i nie wpuszczała go na
+ścieżkę audytów. Decyzja użytkownika: zaliczać gdy średnia ≥7 ORAZ żadne pytanie <6.
+
+### Zmiana
+- **`lib/sessions/section-status.ts`** (rdzeń): rozdzielone dwa progi — `SECTION_FLOOR_THRESHOLD=6`
+  (podłoga, <6 → `needs_followup`) i `SECTION_AVG_THRESHOLD=7` (śr <7 przy wszystkich ≥6 →
+  `below_threshold`, teraz osiągalny). Nowe pole `below_floor_count` w `SectionStats`.
+  `MASTERY_SCORE_THRESHOLD=7` zostaje dla statusu pytania + leech.
+- **`components/sessions/deep-dive-preview.tsx`**: `below_floor_count` w `PreviewStats`,
+  `belowFloorCount` w `MasteryHero`; etykieta `needs_followup` → „X poniżej 6 (blokuje zaliczenie)".
+- **`app/(app)/sessions/deep-dive/page.tsx`**: meta `needs_followup` → „X poniżej 6",
+  `below_threshold` → „X do podciągnięcia"; usunięto martwy `pluralWeak`.
+- **`lib/audits/intervals.ts`**: komentarz — `AUDIT_GOOD_SCORE=7` niezależny od bramy zaliczania.
+- **`lib/sessions/section-status.test.ts`** (nowy, 10/10 pass): przypadki graniczne bramy.
+- **`CLAUDE.md`**: nowa sekcja „Deep Dive — brama zaliczania" (dwa progi + dlaczego progu
+  kolejki NIE obniżać do 6 — martwy zaułek).
+
+### NIE zmieniono (świadomie)
+- Próg kolejki Deep Dive (`MASTERY_THRESHOLD=7` w `selectDeepDiveItems`) — gwarantuje, że
+  `below_threshold` ma co serwować do powtórki (inaczej same szóstki → pusta sesja).
+- Leech (<7), `countUnmasteredOpen` (<7), `AUDIT_GOOD_SCORE` (7).
+
+### Walidacja
+- `node --test` — 17/17 (10 section-status + 7 intervals). `npx tsc --noEmit` — clean.
+- Recenzja: subagenci Code Review (🟢 zero blokerów) + Project Improvements (brak utraty
+  funkcjonalności, brak deadlocka — zweryfikowane end-to-end).
+- **Wpływ na audyty**: `scheduleFirstAuditIfMastered` deleguje do `computeSectionStatus`,
+  więc podąża za regułą — materiał z szóstką (śr ≥7) wchodzi teraz na ścieżkę audytów.
+- UI weryfikuje użytkownik sam.
+
+---
+
 ## 2026-05-31 — Przeprojektowanie audytu: model adaptacyjny „pull", skonsolidowana sesja
 
 ### Powód

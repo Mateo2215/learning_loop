@@ -25,6 +25,7 @@ export interface PreviewStats {
   total_open: number;
   mastered: number;
   weak_count: number;
+  below_floor_count: number;
   leech_count: number;
   section_status: PreviewSectionStatus;
   section_avg: number | null;
@@ -103,6 +104,7 @@ export function DeepDivePreview({
           mastered={stats.mastered}
           total={stats.total_open}
           weakCount={stats.weak_count}
+          belowFloorCount={stats.below_floor_count}
           leechCount={stats.leech_count}
           lastSessionEndedAt={stats.last_session_ended_at}
         />
@@ -228,6 +230,7 @@ function MasteryHero({
   mastered,
   total,
   weakCount,
+  belowFloorCount,
   leechCount,
   lastSessionEndedAt,
 }: {
@@ -235,6 +238,7 @@ function MasteryHero({
   mastered: number;
   total: number;
   weakCount: number;
+  belowFloorCount: number;
   leechCount: number;
   lastSessionEndedAt: string | null;
 }) {
@@ -267,10 +271,10 @@ function MasteryHero({
         </div>
         <div className="flex items-baseline gap-2">
           <span className="font-serif text-[40px] leading-none tracking-[-0.02em] text-warn">
-            {weakCount}
+            {belowFloorCount}
           </span>
           <span className="font-mono text-[11px] uppercase tracking-wide text-warn">
-            słabe (score ≤6)
+            poniżej 6 (blokuje zaliczenie)
           </span>
         </div>
         <ProgressBar mastered={mastered} total={total} />

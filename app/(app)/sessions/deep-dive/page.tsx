@@ -272,20 +272,12 @@ function renderSectionMeta(section: SectionStats, leechCount: number): string {
     case "in_progress":
       return `${section.scored}/${section.total} ocenione · w toku${leech}`;
     case "needs_followup":
-      return `${section.avg?.toFixed(1) ?? "—"} śr · ${section.weak_count} ${pluralWeak(section.weak_count)}${leech}`;
+      return `${section.avg?.toFixed(1) ?? "—"} śr · ${section.below_floor_count} poniżej 6${leech}`;
     case "done":
       return `${section.avg?.toFixed(1) ?? "—"} śr · ✓ zaliczone`;
     case "below_threshold":
-      return `${section.avg?.toFixed(1) ?? "—"} śr · poniżej progu${leech}`;
+      return `${section.avg?.toFixed(1) ?? "—"} śr · ${section.weak_count} do podciągnięcia${leech}`;
   }
-}
-
-function pluralWeak(n: number): string {
-  if (n === 1) return "słabe";
-  const lastDigit = n % 10;
-  const lastTwo = n % 100;
-  if (lastDigit >= 2 && lastDigit <= 4 && (lastTwo < 12 || lastTwo > 14)) return "słabe";
-  return "słabych";
 }
 
 async function fetchDeepDiveStats(
@@ -330,6 +322,7 @@ async function fetchDeepDiveStats(
       total_open: 0,
       mastered: 0,
       weak_count: 0,
+      below_floor_count: 0,
       leech_count: 0,
       section_status: section.status,
       section_avg: null,
@@ -415,6 +408,7 @@ async function fetchDeepDiveStats(
     total_open: section.total,
     mastered: section.mastered_count,
     weak_count: section.weak_count,
+    below_floor_count: section.below_floor_count,
     leech_count: leechCount,
     section_status: section.status,
     section_avg: section.avg,
