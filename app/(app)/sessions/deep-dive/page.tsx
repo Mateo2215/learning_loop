@@ -80,8 +80,9 @@ export default async function DeepDiveSelectorPage({
 
   const doneCount = enrichedAll.filter((m) => m.section.status === "done").length;
 
+  // „Pokaż ukończone" pokazuje WYŁĄCZNIE zaliczone; domyślnie tylko aktywne.
   const enriched: MaterialOption[] = showDone
-    ? enrichedAll
+    ? enrichedAll.filter((m) => m.section.status === "done")
     : enrichedAll.filter((m) => ACTIVE_STATUSES.has(m.section.status));
 
   let activeDeepDive: ActiveDeepDive | null = null;
@@ -104,7 +105,7 @@ export default async function DeepDiveSelectorPage({
       items_planned: number | null;
     };
     const material = active.material_id
-      ? enriched.find((m) => m.id === active.material_id)
+      ? enrichedAll.find((m) => m.id === active.material_id)
       : null;
 
     if (active.material_id && material) {
