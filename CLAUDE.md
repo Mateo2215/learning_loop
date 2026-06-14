@@ -36,7 +36,7 @@ Mateusz is a finance professional transitioning toward AI-enabled finance roles.
 
 ### Why these technologies
 
-**Next.js 15 (App Router) + TypeScript**: Mateusz knows the stack. App Router because we need streaming, server actions, and clean API routes. TypeScript because the data model is complex enough that runtime bugs would be expensive.
+**Next.js 16 (App Router) + TypeScript**: Mateusz knows the stack. App Router because we need streaming, server actions, and clean API routes. TypeScript because the data model is complex enough that runtime bugs would be expensive. (Bootstrapped on 16.2.4 — the original plan said 15, but `create-next-app` shipped 16.)
 
 **Supabase (Postgres + Auth + Realtime + pgvector)**: One service for four concerns. Realtime is critical for multi-device sync. pgvector is critical for semantic search and deduplication. Free tier covers our scale.
 
@@ -259,6 +259,8 @@ create index materials_fts_idx on materials using gin(to_tsvector('simple', titl
 
 ## 🔌 API Endpoints
 
+> ⚠️ **Note (2026-06-14): this section is the original design, not a 1:1 map of the shipped API.** Treat it as intent, not ground truth. The actual routes diverge — e.g. there is a single `GET /api/search` (not quick/semantic/filtered), gap operations live under `/api/gaps/*` (not `/api/ai/*`), costs are rendered server-side with no `/api/costs/*` endpoints, and `import-url` / `import-bulk` / `materials/merge` / `check-similar` / `sessions/:id/dispute` were never built. Conversely, some shipped routes aren't listed here (`/api/sessions/counts`, `/api/stats/score-summary`, `/api/items/:id/history`, `/api/user/clear-data`, `/api/user/delete-account`). **The filesystem under `app/api/` is the source of truth** — run `git ls-files 'app/api/**/route.ts'` for the current list.
+
 All endpoints require authenticated user via Supabase. Pattern: `app/api/[domain]/[action]/route.ts`.
 
 ### Materials
@@ -317,7 +319,7 @@ Use Supabase Realtime client-side directly. No custom endpoints. Subscribe to:
 
 | Operation | Model | Why |
 |---|---|---|
-| Generate cloze flashcards | Haiku | Pattern-following, structured output |
+| Generate cloze flashcards | **Sonnet 4.6** | Quality decision (commit 3c5e9c8) — Haiku produced low-value cards; cost still acceptable at our scale |
 | Generate open questions | Haiku | Simple structured output, list of questions |
 | Auto-tag material | Haiku | Classification task |
 | Compress material | Haiku | Summarization |
@@ -709,7 +711,7 @@ When user imports material after using prompt:
 
 - TypeScript strict mode, no `any`
 - Async/await preferred over Promise chains
-- Server actions for mutations where possible (Next.js 15)
+- Server actions for mutations where possible (Next.js 16)
 - API routes for complex logic with multiple operations
 - No default exports for components (named exports for better refactoring)
 - Component file names: kebab-case (`material-card.tsx`)

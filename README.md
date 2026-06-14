@@ -1,36 +1,45 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Learning Loop
 
-## Getting Started
+Personal learning application that closes the gap between podcast consumption and validated knowledge retention. Single-tenant, built for one user.
 
-First, run the development server:
+**The problem**: NotebookLM podcasts get consumed during walks, but there's no validation of comprehension and no spaced retrieval — the information evaporates.
+
+**The solution**: active recall + spaced repetition (FSRS) + AI validation + a closed loop with Claude.ai for filling detected knowledge gaps.
+
+## How the loop works
+
+1. **Import** a material (DOCX / MD / TXT / paste). A background pipeline compresses it, auto-tags it, embeds it (Voyage), and generates cloze flashcards + open questions.
+2. **Review** cloze flashcards on an FSRS schedule (Again / Hard / Good / Easy).
+3. **Deep Dive** answers open questions; Claude (Sonnet) validates them, with per-category calibration.
+4. **Audits** re-check mastered material on an adaptive schedule.
+5. **Gap detection** spots weak areas and generates a ready-to-paste prompt for Claude.ai; importing the resulting report closes the loop.
+
+## Tech stack
+
+- **Next.js 16** (App Router) + TypeScript (strict)
+- **Supabase** — Postgres + Auth (Magic Link) + Realtime + pgvector, RLS on every table
+- **Anthropic Claude** — Haiku 4.5 (high-volume) + Sonnet 4.6 (validation, generation, gap analysis). No Opus.
+- **Voyage AI** (`voyage-3`) for embeddings
+- **ts-fsrs** for spaced repetition
+- **Tailwind + shadcn/ui**, PWA with a hand-written service worker, offline session queue (`idb`)
+
+## Getting started
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+cp .env.local.example .env.local   # fill in Supabase + Anthropic + Voyage keys
+npm run dev                          # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Apply the SQL migrations in `supabase/migrations/` (in order, `0001` → `0010`) via the Supabase SQL Editor.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Project documentation
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- **[CLAUDE.md](CLAUDE.md)** — architecture, data model, conventions, AI strategy (read first when working on the project). Note: its "API Endpoints" section is design intent; `app/api/` is the source of truth.
+- **[PROGRESS.md](PROGRESS.md)** — session-by-session change log (most recent on top).
+- **[tasks/todo.md](tasks/todo.md)** — current state and remaining work.
+- **[tasks/lessons.md](tasks/lessons.md)** — project-specific lessons learned.
 
-## Learn More
+## Status
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+M1 (core loop), M2 (smart layer) and M3 (polish & mobile) are complete. Remaining work (production deploy, optional features like dispute UI, bulk/URL import, voice input) is tracked in `tasks/todo.md`.

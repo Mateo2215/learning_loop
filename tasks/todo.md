@@ -1,5 +1,10 @@
 # Learning Loop - Task Tracker
 
+## Latest work (po Private-Use Polish)
+
+- [x] **2026-05-31 — Przeprojektowanie audytów na model „pull"** (skonsolidowana sesja ≤3 pytania, adaptacyjne interwały, start dopiero po opanowaniu materiału). Migracja `0010_adaptive_audits.sql`. Szczegóły w PROGRESS.md.
+- [x] **2026-06-03 — Brama zaliczania Deep Dive** (podłoga 6, kolejka serwuje tylko <6 + świeże, średnia nie bramkuje). Szczegóły w PROGRESS.md.
+
 ## Current Session - Private-Use Polish
 
 - [x] Fix generated item rows for `generate-items`
@@ -67,7 +72,7 @@
 
 ### P3 — Nice to have (bez twardego deadline)
 
-- [ ] **Dispute z AI** — UI brakuje; endpoint `POST /api/sessions/:id/dispute` już istnieje
+- [ ] **Dispute z AI** — niezaimplementowane; brak zarówno UI, jak i endpointu `POST /api/sessions/:id/dispute` (mimo że figuruje w planie API w CLAUDE.md)
 - [ ] **Bulk import / URL import** — endpointy zaplanowane, niezaimplementowane
 - [ ] **Voice input** — hook gotowy (`mode="voice"`), brakuje implementacji `SpeechRecognition`
 - [ ] **Cross-topic synthesis** — multi-select materiałów + Sonnet prompt
