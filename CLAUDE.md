@@ -815,3 +815,10 @@ When in doubt about a decision, propose a concrete approach with rationale and a
 ---
 
 **End of CLAUDE.md. This file is the source of truth for Learning Loop.**
+
+---
+
+## AI OS Context
+- Strategic state for this project: `../ai-os/projects/learning-loop/state.md` (status, focus, next actions, handoff).
+- Durable product/technical decisions → `../ai-os/projects/learning-loop/decisions.md` (append-only), not here.
+- This repo holds tactics (`tasks/todo.md`); AI OS holds strategy. Read many, edit one.
