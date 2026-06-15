@@ -41,6 +41,7 @@ export async function detectLowCorrectRate(
     .from("reviews")
     .select("ai_evaluation, fsrs_rating, items!inner(tags)")
     .eq("user_id", userId)
+    .eq("is_audit", false) // self-grade audytu nie zaśmieca correct-rate
     .order("created_at", { ascending: false })
     .limit(LOW_CORRECT_RATE_WINDOW * 10); // pull plenty, group client-side
 
@@ -160,6 +161,7 @@ export async function detectRisingFailures(
     .from("reviews")
     .select("ai_evaluation, fsrs_rating, created_at, items!inner(tags)")
     .eq("user_id", userId)
+    .eq("is_audit", false) // self-grade audytu nie zaśmieca trendu porażek
     .order("created_at", { ascending: false })
     .limit(RISING_FAILURE_WINDOW * 4);
 
@@ -247,6 +249,7 @@ export async function detectNeverConsolidated(
     .from("reviews")
     .select("item_id, ai_evaluation, fsrs_rating, created_at")
     .eq("user_id", userId)
+    .eq("is_audit", false) // self-grade audytu nie liczy się do konsolidacji
     .in("item_id", itemIds)
     .order("created_at", { ascending: true });
 

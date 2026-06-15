@@ -100,40 +100,33 @@ async function settleAuditSession(
   }[];
   if (audits.length === 0) return null;
 
-  // Reviews z tej sesji (po item_id) + powiązanie item → audit.
+  // Audyt reużywa istniejących pytań (audit_id na itemach = null), więc wiążemy
+  // review → audyt PRZEZ materiał. Self-grade audytowy ma is_audit=true.
   const { data: reviewRows } = await supabase
     .from("reviews")
-    .select("item_id, ai_evaluation, score")
-    .eq("session_id", sessionId);
+    .select("material_id, ai_evaluation, score")
+    .eq("session_id", sessionId)
+    .eq("is_audit", true);
 
-  const reviewByItem = new Map<string, { ai_evaluation: string | null; score: number | null }>();
+  const reviewsByMaterial = new Map<string, { ai_evaluation: string | null; score: number | null }[]>();
   for (const row of reviewRows ?? []) {
-    const r = row as { item_id: string; ai_evaluation: string | null; score: number | null };
-    if (!reviewByItem.has(r.item_id)) reviewByItem.set(r.item_id, r);
+    const r = row as { material_id: string; ai_evaluation: string | null; score: number | null };
+    const arr = reviewsByMaterial.get(r.material_id) ?? [];
+    arr.push(r);
+    reviewsByMaterial.set(r.material_id, arr);
   }
 
-  const { data: itemRows } = await supabase
-    .from("items")
-    .select("id, audit_id")
-    .in("audit_id", audits.map((a) => a.id));
-
-  const itemByAudit = new Map<string, string>();
-  for (const row of itemRows ?? []) {
-    const r = row as { id: string; audit_id: string };
-    if (!itemByAudit.has(r.audit_id)) itemByAudit.set(r.audit_id, r.id);
-  }
-
+  const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length;
   const perfScores: number[] = [];
 
   for (const audit of audits) {
-    const itemId = itemByAudit.get(audit.id);
-    const review = itemId ? reviewByItem.get(itemId) : undefined;
+    const reviews = reviewsByMaterial.get(audit.material_id) ?? [];
 
-    // Audyt bez odpowiedzi (sesja przerwana) — zostaw pending. Pytanie zostaje
-    // i zostanie reużyte przy następnej sesji (prepareAudit jest idempotentne).
-    if (!review) continue;
+    // Audyt bez odpowiedzi (sesja przerwana) — zostaw pending. Pytania wrócą
+    // przy następnej sesji (prepareAudit re-selektuje, bez kosztu).
+    if (reviews.length === 0) continue;
 
-    const perf = evaluationToScore(review.ai_evaluation ?? null);
+    const perf = mean(reviews.map((r) => evaluationToScore(r.ai_evaluation ?? null)));
     perfScores.push(perf);
 
     await supabase
@@ -141,14 +134,14 @@ async function settleAuditSession(
       .update({
         status: "completed",
         completed_at: new Date().toISOString(),
-        performance_score: perf,
+        performance_score: Number(perf.toFixed(2)),
       })
       .eq("id", audit.id);
 
-    // Adaptacyjny kolejny audyt — bazujemy na score 1–10 z review (gdy brak,
-    // mapujemy 0..1 na skalę 1–10, żeby decyzja była rozsądna).
-    const score1to10 =
-      typeof review?.score === "number" ? review.score : Math.round(perf * 9) + 1;
+    // Adaptacyjny kolejny audyt — średni wynik 1–10 z odpowiedzi materiału
+    // (fallback: mapowanie 0..1 → 1–10, gdyby brakło score'a).
+    const scores = reviews.map((r) => r.score).filter((s): s is number => typeof s === "number");
+    const score1to10 = scores.length > 0 ? Math.round(mean(scores)) : Math.round(perf * 9) + 1;
     try {
       await scheduleNextAudit(supabase, userId, audit.material_id, audit.audit_round, score1to10);
     } catch (err) {
@@ -157,6 +150,5 @@ async function settleAuditSession(
   }
 
   if (perfScores.length === 0) return null;
-  const mean = perfScores.reduce((a, b) => a + b, 0) / perfScores.length;
-  return Number(mean.toFixed(2));
+  return Number(mean(perfScores).toFixed(2));
 }

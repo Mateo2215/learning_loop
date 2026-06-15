@@ -163,6 +163,7 @@ export async function POST(request: NextRequest) {
         user_id: user.id,
         mode: "audit",
         items_planned: auditItems.length,
+        planned_item_ids: auditItems.map((i) => i.id),
         device,
       })
       .select("id, started_at")
@@ -636,6 +637,7 @@ async function getLatestReviewByItem(
     .from("reviews")
     .select("item_id, created_at, score")
     .eq("user_id", userId)
+    .eq("is_audit", false)
     .in("item_id", itemIds)
     .order("created_at", { ascending: false });
 

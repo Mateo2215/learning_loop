@@ -11,9 +11,21 @@ import type { Category, Item } from "@/lib/db/types";
 const AnswerBodySchema = z.object({
   item_id: z.string().uuid(),
   fsrs_rating: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]).optional(),
+  /** Audit self-graded recall (1–4): Pustka / Mgliście / Wyraźnie / Krystalicznie. */
+  self_grade: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]).optional(),
   user_answer: z.string().optional(),
   response_time_ms: z.number().int().nonnegative().optional(),
 });
+
+/** Samoocena audytu (1–4) → wynik 1–10 (drabina interwałów). */
+const AUDIT_SELF_GRADE_SCORE: Record<1 | 2 | 3 | 4, number> = { 1: 2, 2: 5, 3: 8, 4: 10 };
+/** Samoocena audytu (1–4) → ai_evaluation (performance_score przy rozliczeniu). */
+const AUDIT_SELF_GRADE_EVAL: Record<1 | 2 | 3 | 4, "correct" | "partially_correct" | "incorrect"> = {
+  1: "incorrect",
+  2: "partially_correct",
+  3: "correct",
+  4: "correct",
+};
 
 /**
  * POST /api/sessions/:id/answer
@@ -44,7 +56,7 @@ export async function POST(
   if (!parsed.success) {
     return NextResponse.json({ error: "validation failed", issues: parsed.error.issues }, { status: 400 });
   }
-  const { item_id, fsrs_rating, user_answer, response_time_ms } = parsed.data;
+  const { item_id, fsrs_rating, self_grade, user_answer, response_time_ms } = parsed.data;
 
   // Confirm session belongs to user (RLS would block anyway, but explicit 404 is cleaner).
   const { data: session } = await supabase
@@ -53,6 +65,7 @@ export async function POST(
     .eq("id", sessionId)
     .maybeSingle();
   if (!session) return NextResponse.json({ error: "session not found" }, { status: 404 });
+  const sessionMode = (session as { mode: string }).mode;
 
   // Pull item + FSRS state. We also fetch question + reference + category for open-question validation,
   // and is_leech for open-question leech detection (3 consecutive score <7 → leech).
@@ -64,6 +77,39 @@ export async function POST(
   if (!item) return NextResponse.json({ error: "item not found" }, { status: 404 });
 
   const itemTyped = item as Pick<Item, "id" | "material_id" | "type" | "question" | "answer_reference" | "category" | "fsrs_stability" | "fsrs_difficulty" | "fsrs_due_date" | "fsrs_last_review" | "fsrs_review_count" | "fsrs_lapse_count" | "is_leech">;
+
+  // Audit self-grade: bez AI, bez FSRS, bez leech. Reużywa istniejące pytanie
+  // otwarte; ocenę 1–4 zapisuje jako wynik 1–10. Otagowane is_audit=true, żeby
+  // brama mastery / kolejka Deep Dive / detektory luk go ignorowały.
+  if (sessionMode === "audit") {
+    if (!self_grade) {
+      return NextResponse.json({ error: "self_grade required for audit session" }, { status: 400 });
+    }
+    const score = AUDIT_SELF_GRADE_SCORE[self_grade];
+    const ai_evaluation = AUDIT_SELF_GRADE_EVAL[self_grade];
+
+    const { data: review, error: reviewErr } = await supabase
+      .from("reviews")
+      .insert({
+        user_id: user.id,
+        item_id,
+        material_id: itemTyped.material_id,
+        session_id: sessionId,
+        is_audit: true,
+        fsrs_rating: self_grade,
+        score,
+        ai_evaluation,
+        response_time_ms,
+        validated_at: new Date().toISOString(),
+      })
+      .select("id")
+      .single();
+    if (reviewErr || !review) {
+      return NextResponse.json({ error: `review insert failed: ${reviewErr?.message}` }, { status: 500 });
+    }
+
+    return NextResponse.json({ review_id: review.id, self_grade, score, evaluation: ai_evaluation });
+  }
 
   if (itemTyped.type === "cloze") {
     if (!fsrs_rating) {

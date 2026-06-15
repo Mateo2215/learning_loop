@@ -10,14 +10,15 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { trackAICall } from "@/lib/ai/track";
-import { generateAuditQuestions } from "@/lib/ai/generate-audit";
 import { nextAuditInterval } from "@/lib/audits/intervals";
 import { computeSectionStatus } from "@/lib/sessions/section-status";
-import type { AuditTrigger, Category, Item, Material, TopicAudit } from "@/lib/db/types";
+import type { AuditTrigger, Item, Material, TopicAudit } from "@/lib/db/types";
 
-/** Maks. liczba pytań w jednej skonsolidowanej sesji audytu (1 na materiał). */
+/** Maks. liczba materiałów w jednej skonsolidowanej sesji audytu. */
 export const AUDIT_SESSION_SIZE = 3;
+
+/** Liczba (reużywanych) pytań otwartych pobieranych na materiał w sesji audytu. */
+export const AUDIT_QUESTIONS_PER_MATERIAL = 2;
 
 const DAY_MS = 86_400_000;
 
@@ -81,10 +82,41 @@ export interface PreparedAudit {
   items: Pick<Item, "id" | "material_id" | "type" | "question" | "answer_reference" | "difficulty" | "category">[];
 }
 
+interface LatestReviewInfo {
+  created_at: string;
+  score: number | null;
+}
+
 /**
- * Generates fresh questions for an audit and persists them as items.
- * Idempotent: if items for this audit already exist (re-run), returns those
- * without re-calling Sonnet.
+ * Najnowszy review per item (wszystkie źródła, łącznie z audytowymi — staleness
+ * audytu ma uwzględniać także poprzednie audyty, żeby pytania rotowały).
+ */
+async function getLatestReviewByItem(
+  supabase: SupabaseClient,
+  userId: string,
+  itemIds: string[]
+): Promise<Map<string, LatestReviewInfo>> {
+  if (itemIds.length === 0) return new Map();
+  const { data } = await supabase
+    .from("reviews")
+    .select("item_id, created_at, score")
+    .eq("user_id", userId)
+    .in("item_id", itemIds)
+    .order("created_at", { ascending: false });
+
+  const latest = new Map<string, LatestReviewInfo>();
+  for (const row of data ?? []) {
+    const r = row as { item_id: string; created_at: string; score: number | null };
+    if (!latest.has(r.item_id)) latest.set(r.item_id, { created_at: r.created_at, score: r.score });
+  }
+  return latest;
+}
+
+/**
+ * Wybiera istniejące pytania otwarte materiału do audytu (reużycie, bez AI).
+ * Bierze AUDIT_QUESTIONS_PER_MATERIAL pytań, rotując po najdawniej sprawdzanych
+ * (remis → najniższy ostatni wynik). Pytania bez `answer_reference` są pomijane
+ * (nie ma czego odsłonić). Nie wstawia żadnych nowych itemów.
  */
 export async function prepareAudit(
   supabase: SupabaseClient,
@@ -113,70 +145,43 @@ export async function prepareAudit(
   if (matErr) throw new Error(`material fetch failed: ${matErr.message}`);
   if (!matRow) throw new Error("material not found");
   const material = matRow as PreparedAudit["material"];
-  if (!material.content_compressed) {
-    throw new Error("material has no compressed content — cannot generate audit");
-  }
 
-  // Idempotency: if items already exist for this audit, reuse them.
-  const { data: existing } = await supabase
+  // Reużywamy istniejące pytania otwarte materiału (te z Deep Dive). Audyt nigdy
+  // nie zaznacza `audit_id` na tych itemach — powiązanie audyt↔review idzie przez
+  // sesję, a same pytania mogą wracać w wielu audytach.
+  const { data: openRows } = await supabase
     .from("items")
     .select("id, material_id, type, question, answer_reference, difficulty, category")
-    .eq("audit_id", auditId)
-    .order("created_at", { ascending: true });
-
-  if (existing && existing.length > 0) {
-    return { audit, material, items: existing as PreparedAudit["items"] };
-  }
-
-  // Pull existing question texts for this material so Sonnet avoids duplicates.
-  const { data: existingQs } = await supabase
-    .from("items")
-    .select("question")
     .eq("user_id", userId)
     .eq("material_id", audit.material_id)
-    .is("audit_id", null);
+    .eq("type", "open")
+    .eq("is_suspended", false)
+    .is("audit_id", null)
+    .not("answer_reference", "is", null);
 
-  const existingQuestions = (existingQs ?? []).map((r) => (r as { question: string }).question);
-
-  const { result: questions } = await trackAICall({
-    supabase,
-    userId,
-    operation: "generate_audit_questions",
-    model: "claude-sonnet-4-6",
-    materialId: material.id,
-    metadata: { audit_id: auditId, trigger: audit.trigger },
-    call: () =>
-      generateAuditQuestions({
-        category: material.category as Category,
-        trigger: audit.trigger,
-        round: audit.audit_round ?? 1,
-        compressedContent: material.content_compressed!,
-        existingQuestions,
-      }).then((r) => ({ result: r.result, usage: r.usage })),
-  });
-
-  const rows = questions.map((q) => ({
-    user_id: userId,
-    material_id: material.id,
-    audit_id: auditId,
-    type: "open" as const,
-    question: q.question,
-    answer_reference: q.answer_reference,
-    difficulty: q.difficulty,
-    category: material.category,
-    tags: [] as string[],
-  }));
-
-  const { data: inserted, error: insertErr } = await supabase
-    .from("items")
-    .insert(rows)
-    .select("id, material_id, type, question, answer_reference, difficulty, category");
-
-  if (insertErr || !inserted) {
-    throw new Error(`audit items insert failed: ${insertErr?.message}`);
+  const open = (openRows ?? []) as PreparedAudit["items"];
+  if (open.length === 0) {
+    throw new Error("material has no reusable open questions — cannot run audit");
   }
 
-  return { audit, material, items: inserted as PreparedAudit["items"] };
+  const latest = await getLatestReviewByItem(supabase, userId, open.map((it) => it.id));
+
+  // Najdawniej sprawdzane najpierw (brak review → najwyższy priorytet),
+  // remis → najniższy ostatni wynik (najsłabsze najpierw).
+  const sorted = [...open].sort((a, b) => {
+    const la = latest.get(a.id);
+    const lb = latest.get(b.id);
+    if (!la && lb) return -1;
+    if (la && !lb) return 1;
+    if (la && lb) {
+      const t = new Date(la.created_at).getTime() - new Date(lb.created_at).getTime();
+      if (t !== 0) return t;
+      return (la.score ?? 0) - (lb.score ?? 0);
+    }
+    return 0;
+  });
+
+  return { audit, material, items: sorted.slice(0, AUDIT_QUESTIONS_PER_MATERIAL) };
 }
 
 /**
@@ -273,10 +278,12 @@ export async function scheduleFirstAuditIfMastered(
   const itemIds = (openItems ?? []).map((r) => (r as { id: string }).id);
   if (itemIds.length === 0) return false;
 
+  // Tylko nie-audytowe oceny liczą się do bramy mastery (izolacja self-grade).
   const { data: reviewRows } = await supabase
     .from("reviews")
     .select("item_id, score, created_at")
     .eq("user_id", userId)
+    .eq("is_audit", false)
     .in("item_id", itemIds)
     .order("created_at", { ascending: false });
 
@@ -292,4 +299,94 @@ export async function scheduleFirstAuditIfMastered(
 
   const scheduledFor = new Date(Date.now() + 7 * DAY_MS).toISOString();
   return createPendingAudit(supabase, userId, materialId, 1, scheduledFor);
+}
+
+/**
+ * Bootstrap kolejki audytów: dla każdego gotowego materiału, który jest
+ * opanowany (section status 'done' z nie-audytowych ostatnich wyników) i nie ma
+ * jeszcze pending audytu — planuje pierwszy audyt (round 1, rozłożony +1..+7 dni,
+ * żeby nie spadły wszystkie naraz). Idempotentne (chronione unikalnym indeksem
+ * topic_audits_one_pending_per_material). Zwraca liczbę nowo zaplanowanych.
+ *
+ * Wołane przy wejściu na stronę Audyty — niezależne od crona i od tego, czy
+ * sesja Deep Dive domknie się w idealnym momencie.
+ */
+export async function enrollMasteredMaterials(
+  supabase: SupabaseClient,
+  userId: string,
+): Promise<number> {
+  // Materiały gotowe.
+  const { data: matRows } = await supabase
+    .from("materials")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("status", "ready")
+    .is("deleted_at", null);
+  const materialIds = (matRows ?? []).map((r) => (r as { id: string }).id);
+  if (materialIds.length === 0) return 0;
+
+  // Materiały, które już mają pending audyt — pomijamy.
+  const { data: pendingRows } = await supabase
+    .from("topic_audits")
+    .select("material_id")
+    .eq("user_id", userId)
+    .eq("status", "pending");
+  const hasPending = new Set((pendingRows ?? []).map((r) => (r as { material_id: string }).material_id));
+
+  const candidates = materialIds.filter((id) => !hasPending.has(id));
+  if (candidates.length === 0) return 0;
+
+  // Pytania otwarte tych materiałów (bez audit items).
+  const { data: itemRows } = await supabase
+    .from("items")
+    .select("id, material_id")
+    .eq("user_id", userId)
+    .eq("type", "open")
+    .eq("is_suspended", false)
+    .is("audit_id", null)
+    .in("material_id", candidates);
+
+  const itemsByMaterial = new Map<string, string[]>();
+  for (const row of itemRows ?? []) {
+    const r = row as { id: string; material_id: string };
+    const arr = itemsByMaterial.get(r.material_id) ?? [];
+    arr.push(r.id);
+    itemsByMaterial.set(r.material_id, arr);
+  }
+
+  const allItemIds = [...itemsByMaterial.values()].flat();
+  if (allItemIds.length === 0) return 0;
+
+  // Najnowszy nie-audytowy wynik per item.
+  const { data: reviewRows } = await supabase
+    .from("reviews")
+    .select("item_id, score, created_at")
+    .eq("user_id", userId)
+    .eq("is_audit", false)
+    .in("item_id", allItemIds)
+    .order("created_at", { ascending: false });
+
+  const latestScore = new Map<string, number | null>();
+  for (const row of reviewRows ?? []) {
+    const r = row as { item_id: string; score: number | null };
+    if (!latestScore.has(r.item_id)) latestScore.set(r.item_id, r.score);
+  }
+
+  let enrolled = 0;
+  let offset = 0;
+  for (const materialId of candidates) {
+    const ids = itemsByMaterial.get(materialId);
+    if (!ids || ids.length === 0) continue; // brak pytań otwartych → nie audytujemy
+
+    const latestScores = ids.map((id) => latestScore.get(id) ?? null);
+    if (computeSectionStatus(latestScores).status !== "done") continue;
+
+    const days = 1 + (offset % 7); // rozłożenie +1..+7 dni
+    const scheduledFor = new Date(Date.now() + days * DAY_MS).toISOString();
+    if (await createPendingAudit(supabase, userId, materialId, 1, scheduledFor)) {
+      enrolled += 1;
+      offset += 1;
+    }
+  }
+  return enrolled;
 }

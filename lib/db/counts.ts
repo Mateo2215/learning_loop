@@ -98,6 +98,7 @@ async function countUnmasteredOpen(
     .from("reviews")
     .select("item_id, score, created_at")
     .eq("user_id", userId)
+    .eq("is_audit", false)
     .in("item_id", itemIds)
     .order("created_at", { ascending: false });
   if (reviewErr) return 0;

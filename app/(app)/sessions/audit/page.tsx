@@ -1,7 +1,13 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { getDueAudits, AUDIT_SESSION_SIZE, type DueAudit } from "@/lib/audits/scheduler";
+import {
+  getDueAudits,
+  enrollMasteredMaterials,
+  AUDIT_SESSION_SIZE,
+  AUDIT_QUESTIONS_PER_MATERIAL,
+  type DueAudit,
+} from "@/lib/audits/scheduler";
 import { SectionHeader } from "@/components/shared/section-header";
 import { cn } from "@/lib/utils";
 
@@ -53,6 +59,14 @@ export default async function AuditsListPage() {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
+
+  // Bootstrap: dopnij round-1 audyty opanowanym materiałom bez pending audytu.
+  // Idempotentne; błąd nie blokuje renderu listy.
+  try {
+    await enrollMasteredMaterials(supabase, user.id);
+  } catch {
+    // best-effort
+  }
 
   let due: DueAudit[];
   try {
@@ -114,7 +128,8 @@ export default async function AuditsListPage() {
                   {due.length} {due.length === 1 ? "materiał gotowy" : "materiałów gotowych"} do sprawdzenia
                 </div>
                 <div className="text-muted text-[13px] mt-1">
-                  Najbliższa sesja: {sessionSize} {sessionSize === 1 ? "pytanie" : "pytania/pytań"}
+                  Najbliższa sesja: {sessionSize} {sessionSize === 1 ? "materiał" : "materiały/materiałów"}
+                  {" "}· do {AUDIT_QUESTIONS_PER_MATERIAL} pytań z każdego
                   {due.length > sessionSize && `, reszta (${due.length - sessionSize}) zostaje w kolejce`}.
                 </div>
               </div>

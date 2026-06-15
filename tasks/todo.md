@@ -2,6 +2,7 @@
 
 ## Latest work (po Private-Use Polish)
 
+- [x] **2026-06-15 — Audyty: self-graded recall** (zamiast generowanych pytań otwartych + oceny AI). Audyt reużywa istniejących pytań otwartych (2/materiał), użytkownik ocenia się sam (Pustka/Mgliście/Wyraźnie/Krystalicznie → wynik 1–10 → drabina interwałów). **Zero wywołań AI** w cyklu audytu. Migracja `0011_audit_self_grade.sql` (kolumna `reviews.is_audit` izolująca self-grade od bramy mastery / kolejki Deep Dive / detektorów luk). Naprawiony bootstrap: `enrollMasteredMaterials` (sweep przy wejściu na `/sessions/audit`) dopina round-1 opanowanym materiałom. Usunięto `lib/ai/generate-audit.ts` + prompt. **TODO przyszła iteracja:** luka „decayed mastery" (5. detektor czytający `is_audit=true`). **WYMAGA:** zastosować migrację `0011` przed uruchomieniem nowego kodu (zapytania filtrują `is_audit`). Build green (tsc 0, eslint 0 err).
 - [x] **2026-05-31 — Przeprojektowanie audytów na model „pull"** (skonsolidowana sesja ≤3 pytania, adaptacyjne interwały, start dopiero po opanowaniu materiału). Migracja `0010_adaptive_audits.sql`. Szczegóły w PROGRESS.md.
 - [x] **2026-06-03 — Brama zaliczania Deep Dive** (podłoga 6, kolejka serwuje tylko <6 + świeże, średnia nie bramkuje). Szczegóły w PROGRESS.md.
 

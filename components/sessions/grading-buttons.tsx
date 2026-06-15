@@ -10,6 +10,8 @@ export interface GradingButtonsProps {
   onRate: (rating: GradingRating) => void;
   /** Optional next-interval labels per rating (FSRS preview). */
   intervals?: Partial<Record<GradingRating, string>>;
+  /** Optional label override per rating (e.g. audit self-grade naming). */
+  labels?: Partial<Record<GradingRating, string>>;
   /** When true, keyboard handlers (1/2/3/4) are bound to window. */
   enableKeyboard?: boolean;
   disabled?: boolean;
@@ -40,6 +42,7 @@ const TONE_CLASSES: Record<Spec["tone"], string> = {
 export function GradingButtons({
   onRate,
   intervals,
+  labels,
   enableKeyboard = true,
   disabled,
   className,
@@ -65,6 +68,7 @@ export function GradingButtons({
     <div className={cn("grid grid-cols-2 sm:grid-cols-4 gap-3 w-full max-w-[640px]", className)}>
       {SPECS.map((s) => {
         const interval = intervals?.[s.rating] ?? s.fallbackInterval;
+        const label = labels?.[s.rating] ?? s.label;
         return (
           <button
             key={s.rating}
@@ -78,7 +82,7 @@ export function GradingButtons({
             )}
           >
             <Kbd>{s.rating}</Kbd>
-            <span className="font-medium text-[14px]">{s.label}</span>
+            <span className="font-medium text-[14px]">{label}</span>
             <span className="font-mono text-[11px] text-muted">{interval}</span>
           </button>
         );
