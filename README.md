@@ -31,15 +31,17 @@ cp .env.local.example .env.local   # fill in Supabase + Anthropic + Voyage keys
 npm run dev                          # http://localhost:3000
 ```
 
-Apply the SQL migrations in `supabase/migrations/` (in order, `0001` → `0010`) via the Supabase SQL Editor.
+Apply the SQL migrations in `supabase/migrations/` (in order, `0001` → `0011`) via the Supabase SQL Editor.
 
 ## Project documentation
 
-- **[CLAUDE.md](CLAUDE.md)** — architecture, data model, conventions, AI strategy (read first when working on the project). Note: its "API Endpoints" section is design intent; `app/api/` is the source of truth.
+- **[CLAUDE.md](CLAUDE.md)** — architecture, data model, conventions, AI strategy (read first when working on the project). Reconciled as-built 2026-06-16; for exact API/schema the source of truth is `app/api/**/route.ts` and `supabase/migrations/`.
 - **[PROGRESS.md](PROGRESS.md)** — session-by-session change log (most recent on top).
 - **[tasks/todo.md](tasks/todo.md)** — current state and remaining work.
 - **[tasks/lessons.md](tasks/lessons.md)** — project-specific lessons learned.
 
 ## Status
 
-M1 (core loop), M2 (smart layer) and M3 (polish & mobile) are complete. Remaining work (production deploy, optional features like dispute UI, bulk/URL import, voice input) is tracked in `tasks/todo.md`.
+**Deployed and in daily use** (Vercel + Supabase, including mobile). M1 (core loop), M2 (smart layer) and M3 (polish & mobile) are complete.
+
+The app is in a **use-and-iterate-reactively** mode — no active development push; changes land when real use surfaces a concrete need. Remaining items are optional / nice-to-have (dispute UI, bulk/URL import, voice input, Lighthouse audit, Sentry) and tracked in `tasks/todo.md`.

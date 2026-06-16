@@ -61,55 +61,76 @@ Mateusz is a finance professional transitioning toward AI-enabled finance roles.
 
 ## 🗂️ Project Structure
 
+> **As-built (2026-06-16).** This reflects the shipped tree, not the original design sketch. The filesystem is the source of truth — when in doubt, list the directory.
+
 ```
 /learning-loop
 ├── /app                          # Next.js App Router
-│   ├── /(auth)                   # Auth routes (login, callback)
-│   ├── /(app)                    # Main app (protected)
-│   │   ├── /dashboard            # Home with "fresh materials" widget
-│   │   ├── /materials            # Library + import
-│   │   ├── /sessions             # Active session UI
-│   │   │   ├── /deep-dive        # Open questions session
-│   │   │   └── /review           # Flashcard SR session
-│   │   ├── /search               # 3-tier search
-│   │   ├── /gaps                 # Knowledge gap detection
-│   │   ├── /costs                # Cost monitoring dashboard
-│   │   └── /settings             # Theme, export, account
-│   └── /api                      # API routes
-│       ├── /materials/...        # CRUD + import + processing
-│       ├── /sessions/...         # Session lifecycle + answers
-│       ├── /ai/...               # AI operations (with cost tracking)
-│       └── /sync/...             # Realtime helpers
-├── /components
+│   ├── /(auth)/login             # Magic-link login
+│   ├── /auth                     # callback (route) + finish (page)
+│   ├── /(app)                    # Main app (protected by middleware)
+│   │   ├── /dashboard            # Home ("fresh materials" widget)
+│   │   ├── /materials            # Library + /[id] detail + /import
+│   │   ├── /sessions             # /deep-dive/[material_id], /review, /audit (+ /run)
+│   │   ├── /search               # Single search surface (full-text + semantic)
+│   │   ├── /gaps                 # Gap list + /[id] detail
+│   │   ├── /costs                # Cost dashboard
+│   │   ├── /stats                # Score summary
+│   │   └── /settings             # Theme, calibration, export, danger-zone, /costs
+│   └── /api                      # Route handlers (source of truth for the API)
+│       ├── /materials/...        # import, [id], [id]/link-gap
+│       ├── /sessions/...         # start, [id]/answer, [id]/calibrate, [id]/end, counts, sync-offline
+│       ├── /gaps/...             # detect, [id]/generate-prompt, [id]/dismiss
+│       ├── /items/[id]           # update + /history
+│       ├── /ai/generate-items    # on-demand item (re)generation
+│       ├── /cron/...             # audits, gaps, calibration (Vercel Cron)
+│       ├── /export/json          # manual JSON export
+│       ├── /user/...             # clear-data, delete-account
+│       ├── /stats/score-summary  # dashboard stats
+│       └── /dev/...              # local-only backfills + smoke-ai
+├── /components                   # UI grouped by feature
 │   ├── /ui                       # shadcn primitives
-│   ├── /materials                # Material-specific components
-│   ├── /sessions                 # Session UI (mobile-first!)
-│   └── /shared                   # Cross-cutting (theme, auth, etc.)
-├── /lib
-│   ├── /ai                       # Anthropic + Voyage clients
-│   ├── /db                       # Supabase queries (server-side)
-│   ├── /fsrs                     # Spaced repetition algorithm
-│   ├── /processing               # Material processing pipeline
-│   └── /utils                    # Pure functions
-├── /supabase
-│   ├── /migrations               # SQL migrations
-│   └── /functions                # Edge functions if needed
-├── /public
-│   ├── manifest.json             # PWA manifest
-│   └── /icons                    # PWA icons
-├── /workers                      # Service worker config
-└── CLAUDE.md                     # This file - read first
+│   ├── /materials /sessions /dashboard /stats /shared
+├── /lib                          # All server/domain logic
+│   ├── /ai                       # Anthropic + Voyage clients, prompts/, track, pricing, operations, limits
+│   ├── /processing               # Import pipeline (parse → compress → tag → embed → generate items)
+│   ├── /sessions                 # Deep Dive selection, section-status (mastery gate), active-guard
+│   ├── /audits                   # Adaptive audit scheduler + interval ladder (intervals.ts)
+│   ├── /gaps                     # Knowledge-gap detector + runner
+│   ├── /fsrs                     # Spaced repetition (ts-fsrs wrapper)
+│   ├── /calibration              # Per-category AI bias aggregation
+│   ├── /offline                  # IndexedDB store + offline answer queue
+│   ├── /realtime                 # Supabase Realtime subscriptions
+│   ├── /stats /nav /db           # Score summary, route helpers, DB queries + types
+│   └── /supabase                 # client / server / middleware factories
+├── /supabase/migrations          # SQL migrations (0001 → 0011) — schema source of truth
+├── /public                       # PWA manifest, icons, hand-written service worker
+├── /docs                         # plans/ + progress-archive.md
+├── /tasks                        # todo.md (tactics) + lessons.md
+└── CLAUDE.md                     # This file — read first
 ```
 
 ---
 
 ## 📐 Database Schema (Supabase / Postgres)
 
+> **Source of truth: `supabase/migrations/0001 → 0011` and the hand-kept types in `lib/db/types.ts`** (updated in the same PR as any migration). The SQL below is the original `0001` conceptual model — read it for shape, but trust the migrations + types for exact columns. As-built deltas since `0001` are listed right after.
+
 **All tables have**: `id uuid primary key default gen_random_uuid()`, `created_at timestamptz default now()`, `updated_at timestamptz default now()` with auto-update trigger.
 
 **RLS enabled on all tables** with policy `auth.uid() = user_id`. Single-tenant but RLS is non-negotiable security baseline.
 
-### Core tables
+### As-built deltas since the 0001 sketch
+
+- **`materials`**: + `deleted_at` (soft delete), `suggested_gap_id` (loop-closure candidate), `was_truncated` (0009 — compression hit the token cap).
+- **`reviews`**: + `score smallint` 1–10 (0007 — the granular open-answer score; the FSRS `fsrs_rating` 1–4 is cloze-only), + `is_audit boolean` (0011 — isolates self-graded audit reviews from latest-score logic). `ai_evaluation` (3-state) still exists alongside `score`.
+- **`items`**: + `audit_id` (nullable link to `topic_audits`; current audits reuse Deep Dive questions and leave it `null`).
+- **`sessions`**: + `planned_item_ids uuid[]` (pre-loaded item list, supports offline + resume).
+- **`topic_audits`**: + `audit_round int` (0010 — drives the interval ladder); `trigger` gained `'adaptive'`; one `pending` per material enforced by unique index. `performance_score` exists but the self-graded redesign scores per review, not via AI.
+- **`calibration_offsets`**: + `score_offset numeric` (0007 — biases the 1–10 score, mirroring `current_offset` for the 3-state evaluation).
+- **`knowledge_gaps`**: + `title`.
+
+### Core tables (0001 conceptual model)
 
 ```sql
 -- Materials (post-compression, no original content stored)
@@ -259,57 +280,22 @@ create index materials_fts_idx on materials using gin(to_tsvector('simple', titl
 
 ## 🔌 API Endpoints
 
-> ⚠️ **Note (2026-06-14): this section is the original design, not a 1:1 map of the shipped API.** Treat it as intent, not ground truth. The actual routes diverge — e.g. there is a single `GET /api/search` (not quick/semantic/filtered), gap operations live under `/api/gaps/*` (not `/api/ai/*`), costs are rendered server-side with no `/api/costs/*` endpoints, and `import-url` / `import-bulk` / `materials/merge` / `check-similar` / `sessions/:id/dispute` were never built. Conversely, some shipped routes aren't listed here (`/api/sessions/counts`, `/api/stats/score-summary`, `/api/items/:id/history`, `/api/user/clear-data`, `/api/user/delete-account`). **The filesystem under `app/api/` is the source of truth** — run `git ls-files 'app/api/**/route.ts'` for the current list.
+> **The filesystem under `app/api/**/route.ts` is the source of truth.** This is a domain map of what's shipped, not a copy of request/response shapes (those drift — read the handler). To list routes: `git ls-files 'app/api/**/route.ts'`. All routes require an authenticated Supabase user (enforced in middleware + RLS).
 
-All endpoints require authenticated user via Supabase. Pattern: `app/api/[domain]/[action]/route.ts`.
+As-built domains (2026-06-16):
 
-### Materials
+- **`materials/`** — `import` (POST, returns a job; processing is async), `[id]` (GET/PATCH/DELETE soft-delete), `[id]/link-gap`.
+- **`sessions/`** — `start`, `[id]/answer` (open answers validated by Sonnet here), `[id]/calibrate`, `[id]/end` (audit scoring + mastery-gate scheduling happen here), `counts`, `sync-offline`. *No dispute route — disputes are not built.*
+- **`gaps/`** — `detect`, `[id]/generate-prompt`, `[id]/dismiss`.
+- **`items/[id]`** — PATCH (edit, preserves `original_question`) + `history`.
+- **`ai/generate-items`** — on-demand (re)generation of items for a material.
+- **`calibration/aggregate`** — roll up per-category AI bias offsets.
+- **`cron/`** — `audits`, `gaps`, `calibration` (Vercel Cron entrypoints).
+- **`export/json`**, **`stats/score-summary`**, **`user/{clear-data,delete-account}`**.
+- **`search`** — a single `GET /api/search` (full-text + semantic), not the old quick/semantic/filtered trio.
+- **`dev/`** — local-only helpers (`backfill-embeddings`, `backfill-fsrs`, `force-audit-due/[material_id]`, `smoke-ai`).
 
-- `POST /api/materials/import` - Upload file or paste text. Returns `{ job_id }`. Processing async.
-- `POST /api/materials/import-url` - Web scrape + process. Returns `{ job_id }`.
-- `POST /api/materials/import-bulk` - Multiple files at once. Returns `{ job_ids: [] }`.
-- `GET /api/materials` - List with filters. Query params: `category`, `tags`, `status`, `limit`, `cursor`.
-- `GET /api/materials/:id` - Full material details.
-- `PATCH /api/materials/:id` - Update title, tags, notes.
-- `DELETE /api/materials/:id` - Soft delete (sets `deleted_at`).
-- `POST /api/materials/:id/check-similar` - Returns top 3 similar materials by embedding.
-- `POST /api/materials/merge` - Merge two materials. Body: `{ keep_id, merge_id }`.
-
-### Sessions
-
-- `POST /api/sessions/start` - Body: `{ mode: 'deep_dive' | 'review' | 'audit', material_id?, item_count? }`. Returns full session with pre-loaded items (for offline mode).
-- `POST /api/sessions/:id/answer` - Submit answer for one item. Body: `{ item_id, answer, fsrs_rating?, response_time_ms }`. AI validation happens here for open questions.
-- `POST /api/sessions/:id/dispute` - Open dispute with AI. Body: `{ review_id, user_argument }`. Returns AI counter-response.
-- `POST /api/sessions/:id/calibrate` - User feedback on AI validation. Body: `{ review_id, calibration: 'agree' | 'too_strict' | 'too_lenient' }`.
-- `POST /api/sessions/:id/end` - Close session. Returns summary.
-- `POST /api/sessions/sync-offline` - Batch upload offline-queued reviews. Body: `{ reviews: [...] }`. Returns batch validation results.
-
-### AI operations (internal, called by other endpoints)
-
-- `POST /api/ai/generate-items` - Generate questions/flashcards from material. Used by import pipeline.
-- `POST /api/ai/validate-answer` - Validate open answer.
-- `POST /api/ai/detect-gaps` - Run weekly gap analysis.
-- `POST /api/ai/generate-prompt` - Generate Claude.ai prompt for a gap.
-- `POST /api/ai/generate-audit` - Fresh audit questions for a material.
-
-### Search
-
-- `GET /api/search/quick?q=...` - Full-text search across materials, items, tags. Sub-100ms target.
-- `POST /api/search/semantic` - Body: `{ query }`. Embedding-based similarity search.
-- `POST /api/search/filtered` - Body: `{ filters: {...} }`. Multi-criteria search.
-
-### Costs
-
-- `GET /api/costs/summary` - Today / month / projection.
-- `GET /api/costs/breakdown?period=month` - Per operation, per model.
-- `GET /api/costs/per-material` - Cost per material, sorted descending.
-
-### Sync (Realtime helpers)
-
-Use Supabase Realtime client-side directly. No custom endpoints. Subscribe to:
-- `materials` table for status changes (processing → ready)
-- `processing_jobs` for progress updates
-- `items` for cross-device session state
+**Costs** are rendered server-side (`/costs`, `/settings/costs` pages reading `lib/ai/*` + `usage_logs`) — there are no `/api/costs/*` endpoints. **Realtime** uses the Supabase client directly (no custom endpoints): subscribe to `materials` (status), `processing_jobs` (progress), `sessions`/`items` (cross-device).
 
 ---
 
@@ -330,8 +316,11 @@ Use Supabase Realtime client-side directly. No custom endpoints. Subscribe to:
 | Dispute resolution | Sonnet | Argumentation |
 | Detect knowledge gaps | Sonnet | Pattern recognition across data |
 | Generate Claude.ai prompt | Sonnet | Structured creative writing |
-| Generate audit questions | Sonnet | Diverse, non-repetitive questions |
 | Cross-topic synthesis | Sonnet | Multi-context reasoning |
+
+> **Audits use NO AI.** Topic audits reuse existing open questions and the user self-grades (1–4 → score). The old "generate audit questions via Sonnet" path was removed in the 2026-06-15 redesign. See "Topic Audits — self-graded recall" below.
+>
+> **Not yet wired (design intent only):** Feynman & scenario generation/validation, dispute resolution, cross-topic synthesis. Their operation-type enums exist in `lib/ai/operations.ts`, but no generator/route is built. Treat rows above for those as intent, not shipped behaviour.
 
 ### Prompt caching
 
@@ -339,9 +328,9 @@ Use Supabase Realtime client-side directly. No custom endpoints. Subscribe to:
 
 Expected savings: 70-90% on input token costs after first call within 5-minute window.
 
-### Batch API for bulk imports
+### Batch API for bulk imports (NOT built — design intent)
 
-When `import-bulk` has >5 materials, route generation jobs through Batch API (50% cheaper, 24h SLA acceptable). Single imports go through synchronous API (need fast feedback).
+Bulk import and Batch-API routing were never shipped — imports are one material at a time through the synchronous API. Kept as the intended approach if bulk import is built later: when a batch has >5 materials, route generation jobs through the Batch API (50% cheaper, 24h SLA acceptable); single imports stay synchronous for fast feedback.
 
 ---
 
@@ -423,6 +412,20 @@ Logika w `lib/sessions/section-status.ts` (`computeSectionStatus`, czysta funkcj
 
 `AUDIT_GOOD_SCORE = 7` (drabina interwałów audytu) jest niezależny od bramy zaliczania.
 
+## 🔁 Topic Audits — self-graded recall (redesigned 2026-06-15)
+
+Re-checks already-mastered material on an adaptive schedule, at **zero AI cost**. Orchestration in `lib/audits/scheduler.ts`; pure interval math in `lib/audits/intervals.ts`; scoring + status transitions on session close in `app/api/sessions/[id]/end`.
+
+- **No AI, no new questions.** An audit reuses the material's existing open questions. `prepareAudit` picks `AUDIT_QUESTIONS_PER_MATERIAL = 2` per material, rotating oldest-reviewed first (tie → lowest last score); questions without `answer_reference` are skipped. No items are inserted.
+- **Self-grade.** The user rates recall on 4 levels (Pustka / Mgliście / Wyraźnie / Krystalicznie = 1–4), mapped to a 1–10 score. No AI evaluation, no `performance_score` from a model.
+- **Isolation via `reviews.is_audit = true`** (migration 0011). Audit reviews must NOT pollute the "latest score of an open question" consumed by the mastery gate, the Deep Dive queue, and gap detectors — every such reader filters `is_audit = false`.
+- **Lifecycle — at most one `pending` audit per material** (DB unique index `topic_audits_one_pending_per_material`):
+  - *First audit:* +7 days once a material reaches mastery (`scheduleFirstAuditIfMastered`, on Deep Dive session end). `enrollMasteredMaterials` backfills the queue when you open the Audits page (spread +1..+7 days), so it doesn't depend on perfect session timing.
+  - *Next audit:* `scheduleNextAudit` after each completed audit, interval from the ladder.
+- **Adaptive interval ladder** (`AUDIT_INTERVAL_LADDER = [7, 21, 60, 150, 365]` days). Per audited-question score: ≥7 (`AUDIT_GOOD_SCORE`) → climb a rung (longer); ≤3 (`AUDIT_POOR_SCORE`) → drop a rung (sooner); 4–6 → stay. Floor = 7 days.
+- **Session shape.** Consolidates up to `AUDIT_SESSION_SIZE = 3` materials. `getDueAudits` lists `pending` audits with `scheduled_for <= now()`, oldest first.
+- **Triggers.** New audits use `trigger = 'adaptive'`; legacy `day_7/day_30/day_90/resurrection` values survive only on historical rows.
+
 ## 🧠 FSRS Algorithm
 
 Use library `ts-fsrs` (npm package, well-maintained). Don't implement from scratch.
@@ -447,30 +450,32 @@ const fsrsParams = {
 
 ## 📦 Material Processing Pipeline
 
-When user imports material, this is the async flow (background job):
+Implemented in `lib/processing/pipeline.ts` (`processMaterial`). Async background flow per `processing_jobs` row, writing `progress` as it advances:
 
 ```
-1. Parse source              → extract text from DOCX/MD/TXT/URL
-2. Detect category           → AI suggests, user confirms (or pre-set in bulk)
-3. Generate embedding        → Voyage-3 on full text
-4. Check duplicates          → similarity search
-   - If >0.92: auto-merge (with notification)
-   - If 0.85-0.92: flag for user decision
-   - If <0.85: continue
-5. Compress content          → Haiku summarizes to ~30% length
-6. Auto-tag                  → Haiku generates 3-5 tags
-7. Generate items            → Haiku creates:
-   - 10-20 cloze flashcards
-   - 5-8 open questions
-   - 1-2 Feynman prompts
-   - 1-2 scenario prompts (if category is finanse/programowanie)
-8. Schedule audits           → create topic_audits rows for day_7, day_30, day_90
-9. Mark material as 'ready'  → triggers Realtime update to client
+1. Parse source        → done at the API boundary; raw text arrives in payload.raw_text
+2. Category            → trusted from the import form (no AI category detection wired)
+3. Embedding           → Voyage-3 (1024 dims) over the raw text                    [progress 15]
+4. Duplicate check     → RPC match_materials (cosine), cutoff 0.85
+                         - ≥0.92 → record a 'merged' relation, but KEEP BOTH (no destructive auto-merge)
+                         - 0.85–0.92 → record a 'related' soft link
+                         - <0.85 → ignore
+                         (+ loop closure: RPC match_gaps → store materials.suggested_gap_id if a hit)  [progress 20]
+5. Compress            → Haiku, ~30% length; sets was_truncated if output hit the token cap  [progress 30]
+6. Auto-tag            → Haiku, 3–5 tags                                            [progress 45]
+   → material row inserted here (status 'processing') so items can FK to it          [progress 55]
+7a. Cloze cards        → Sonnet 4.6 (quality decision), low-value cards filtered out  [progress 75]
+7b. Open questions     → Haiku                                                       [progress 90]
+8. Audits              → NOT scheduled at import. Adaptive audits start only AFTER a
+                         material is mastered — see lib/audits + sessions/[id]/end.
+9. Mark 'ready'        → triggers a Realtime UPDATE to the client                    [progress 100]
 ```
 
-**Each step logs cost. Each step can fail independently** - implement retries (3x with exponential backoff) before marking job as failed.
+**Only two item types are generated: cloze (Sonnet) and open (Haiku).** Feynman/scenario exist as `ItemType`/operation-type enums but no generator is wired for them.
 
-**Job status visible in UI** via Realtime subscription on `processing_jobs` table.
+**No per-step retry.** Any step that throws marks the material `failed` and the job `failed` (with the error), then re-throws. There is no automatic backoff/retry — re-import to retry.
+
+**Job status visible in UI** via Realtime subscription on the `processing_jobs` table.
 
 ---
 
@@ -642,6 +647,8 @@ When user imports material after using prompt:
 ---
 
 ## 🚀 Implementation Milestones
+
+> **As-built status (2026-06-16): all three milestones are complete and the app is deployed (Vercel + Supabase) and in daily use, including mobile.** The checklists below are the *original plan* kept for historical reference — the unchecked `[ ]` boxes reflect the planning document, not outstanding work. For what is genuinely still open (optional / nice-to-have), see `tasks/todo.md`.
 
 **Critical**: Build full architecture in CLAUDE.md (this file). Implement in 3 milestones, each producing working end-to-end code for its scope. Between milestones, app must be functional for the use cases covered.
 

@@ -2,8 +2,10 @@
  * Topic-audit orchestration.
  *
  * `getDueAudits(supabase, userId)` — list pending audits ready to run now.
- * `prepareAudit(supabase, userId, auditId)` — generate fresh questions via Sonnet,
- *   create items linked to the audit, return question list for the UI to play.
+ * `prepareAudit(supabase, userId, auditId)` — REUSE the material's existing open
+ *   questions (no AI, no new items inserted), pick AUDIT_QUESTIONS_PER_MATERIAL of
+ *   them rotating oldest-reviewed first, return the list for the UI to play.
+ *   The user self-grades each; isolation via reviews.is_audit.
  *
  * Scoring + status transitions happen in /api/sessions/[id]/end when the
  * session that ran the audit closes.

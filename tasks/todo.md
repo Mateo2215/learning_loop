@@ -18,7 +18,7 @@
 
 ## Current State
 
-**M1 — DONE. M2 — DONE. M3 — DONE (Phase 11 zamknięta).** Build green, tsc clean. Full loop przetestowany end-to-end. Aplikacja jest funkcjonalna i gotowa do deployu. Pozostały bloki P1 (deploy) + P2 (placeholder UI) + loose ends.
+**M1 — DONE. M2 — DONE. M3 — DONE (Phase 11 zamknięta).** Build green, tsc clean. Full loop przetestowany end-to-end. **Aplikacja wdrożona (Vercel + Supabase) i używana codziennie na mobile** (potwierdzone 2026-06-16). Bloki C/D/E/F zamknięte. Pozostają tylko rzeczy opcjonalne (Lighthouse, Sentry) i P3 nice-to-have.
 
 ## M3 — Polish & Mobile (Phase 11 left)
 
@@ -39,13 +39,13 @@
 
 ## Remaining Work — Roadmap do 100%
 
-### BLOK B — Deploy produkcyjny [P1] ✅ CZĘŚCIOWO DONE
+### BLOK B — Deploy produkcyjny [P1] ✅ DONE
 
 - [x] **`vercel.json`** — konfiguracja cron scheduli: audits co 6h, gaps pon. 07:00 UTC, calibration 05:00 UTC
 - [x] **`.env.local.example`** — dodano `CRON_SECRET` z instrukcją generacji
-- [ ] **Vercel deploy (MANUALNY)** — połącz repo z Vercel, ustaw env vars, dodaj Redirect URL w Supabase Auth
-- [ ] **Lighthouse audit na produkcji** — cel ≥90 mobile (po deployu, wymaga HTTPS)
-- [ ] **Sentry** (opcjonalne) — `npm install @sentry/nextjs`, `npx @sentry/wizard@latest -i nextjs`
+- [x] **Vercel deploy** — wdrożony (Vercel + Supabase), działa na mobile, używany codziennie (potwierdzone przez użytkownika 2026-06-16)
+- [ ] **Lighthouse audit na produkcji** — opcjonalne, niepilnowane (appka działa mobilnie; to tylko ocena jakości)
+- [ ] **Sentry** — opcjonalne, niezrobione (monitoring błędów; `npm install @sentry/nextjs`, `npx @sentry/wizard@latest -i nextjs`)
 
 ### BLOK C — Placeholder przyciski ✅ DONE
 
@@ -90,7 +90,7 @@ Full loop tested end-to-end:
 
 Total spend in M1 testing so far: ~\$0.04. Soft limit \$5 nowhere near.
 
-**Outstanding for full M1**: Voyage embeddings still mocked — pipeline accepts a deterministic stub vector (TODO(voyage) in lib/processing/pipeline.ts). When the user provides VOYAGE_API_KEY, swap in the real embed() call. Otherwise nothing in M1 *blocks* on this — dedup (currently skipped) and semantic search (M2 only) are the consumers.
+**Voyage embeddings: LIVE** — `lib/processing/pipeline.ts` calls the real `embed()` (Voyage-3, 1024 dims) since M2 Phase 1. The old M1 "mocked / TODO(voyage)" note is obsolete (the stub was replaced when the API key was wired). Embeddings power dedup + semantic search in daily use.
 
 ### Files modified / created so far
 - `package.json` — Next 16.2.4, React 19.2, all CLAUDE.md core deps installed
@@ -105,13 +105,7 @@ Total spend in M1 testing so far: ~\$0.04. Soft limit \$5 nowhere near.
 ### Blockers
 - None right now.
 
-### Next up (this session)
-- [ ] Verify dev server starts (`npm run dev` → localhost:3000)
-- [ ] Verify dark mode by default in shadcn theme
-- [ ] First commit: bootstrap scaffold
-- [ ] Phase 1 checkpoint: show working "/" + dark mode + TS clean
-
-## Tasks
+## Tasks (historical milestone tracking — all complete)
 
 ### Phase 1 — Bootstrap
 - [x] `create-next-app` with TS / Tailwind / App Router / ESLint / Turbopack
@@ -120,8 +114,8 @@ Total spend in M1 testing so far: ~\$0.04. Soft limit \$5 nowhere near.
 - [x] Folder structure per CLAUDE.md
 - [x] Supabase SSR clients
 - [x] Root `middleware.ts`
-- [ ] Verify `npm run dev` works
-- [ ] First git commit
+- [x] Verify `npm run dev` works
+- [x] First git commit
 
 ### Phase 2 — DB + Auth (DONE)
 - [x] `supabase/migrations/0001_init.sql` with all tables + RLS + indexes
@@ -130,7 +124,7 @@ Total spend in M1 testing so far: ~\$0.04. Soft limit \$5 nowhere near.
 - [x] `app/auth/callback/route.ts` (PKCE) + `app/auth/finish/page.tsx` (implicit fallback)
 - [x] `app/(app)/dashboard/page.tsx` (protected, server-action sign-out)
 - [x] Magic Link end-to-end verified — login → /dashboard renders user email
-- [ ] P2: `npx supabase gen types typescript` → `lib/db/database.types.ts` (deferred to Phase 3 when we start querying tables from code)
+- [~] P2: `supabase gen types` not adopted — schema types are hand-maintained in `lib/db/types.ts` (updated in the same PR as each migration). Decision stands as-built; no generated `database.types.ts`.
 
 ### Phase 3 — AI layer + cost tracking (DONE)
 - [x] `lib/ai/pricing.ts`, `lib/ai/operations.ts`, `lib/ai/errors.ts`
@@ -153,7 +147,7 @@ Total spend in M1 testing so far: ~\$0.04. Soft limit \$5 nowhere near.
 - [x] `app/(app)/materials/[id]/page.tsx` (detail view)
 - [x] `lib/db/types.ts` (hand-maintained TS types matching schema)
 - [x] `app/(app)/layout.tsx` shared nav + `app/layout.tsx` Sonner Toaster + login/import toasts
-- [ ] P3: replace mock embedding with real Voyage call once API key is provided (TODO(voyage) in pipeline.ts)
+- [x] P3: real Voyage embedding wired in pipeline.ts (done in M2 Phase 1 — mock removed)
 
 ### Phase 5 — Review session (cloze + FSRS) (DONE)
 - [x] `lib/fsrs/scheduler.ts` (ts-fsrs wrap with project config + leech rule)
@@ -175,7 +169,7 @@ Total spend in M1 testing so far: ~\$0.04. Soft limit \$5 nowhere near.
 - [x] `app/(app)/costs/page.tsx` (today / month / projection + breakdowns + recent calls + soft/hard banners)
 - [x] `app/(app)/dashboard/page.tsx` rewritten with tiles (due cards highlighted, materials, items, month cost)
 - [x] Nav 'Koszty' link
-- [ ] P3 (deferred to M3): Theme toggle + auto-switch after 19:00 — currently dark-mode only via root `<html class="dark">`
+- [x] P3 (done in M3 Phase 1): Theme toggle (light/dark/system) + auto-switch forcing dark after 19:00 — `lib/theme/provider.tsx` + `/settings` theme section
 - [x] Final M1 smoke verified end-to-end through real session
 
 ## M2 — Smart Layer (in progress)

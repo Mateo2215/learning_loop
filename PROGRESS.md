@@ -4,6 +4,79 @@ Session handoff log. Most recent entry on top. Keep this file under 200 lines.
 
 ---
 
+## 2026-06-16 — Reconciliation CLAUDE.md z kodem (drift docs → as-built)
+
+### Powód
+`CLAUDE.md` (oznaczony „read first / source of truth") rozjechał się z kodem na tyle, że
+aktywnie wprowadzał w błąd. Najgroźniejszy drift: opisywał audyty oparte o AI
+(`/api/ai/generate-audit`, „generate audit questions → Sonnet"), mimo że redesign
+2026-06-15 zrobił z nich **self-graded recall bez AI**. Decyzja: nie tworzyć nowego
+dokumentu architektury (trzecie źródło prawdy → ten sam drift za miesiąc), tylko
+przywrócić prawdziwość istniejącemu CLAUDE.md.
+
+### Zmiana (tylko dokumentacja + 1 komentarz)
+- **`CLAUDE.md` → Project Structure**: realna mapa `lib/`/`app/` (doszły `audits/`, `gaps/`,
+  `calibration/`, `offline/`, `realtime/`, `stats/`…); nagłówek „as-built", filesystem = źródło prawdy.
+- **`CLAUDE.md` → Material Processing Pipeline**: wierny przepływ z `pipeline.ts` — cloze=**Sonnet**
+  (nie Haiku), tylko cloze+open (zero Feynman/scenario), audyty **nie** przy imporcie, brak
+  destrukcyjnego auto-merge (≥0.92 = relacja `merged`, oba zostają), brak retry.
+- **`CLAUDE.md` → nowa sekcja „Topic Audits — self-graded recall"**: reużycie pytań otwartych,
+  samoocena 1–4 → score, izolacja `reviews.is_audit`, drabina `[7,21,60,150,365]`, ≤3 materiały/sesja.
+- **`CLAUDE.md` → tabela strategii AI**: usunięty wiersz „generate audit questions → Sonnet";
+  notka o operacjach niewpiętych (Feynman/scenario/dispute/cross-topic — enumy w `operations.ts`, brak generatorów).
+- **`CLAUDE.md` → API**: z nieaktualnego katalogu endpointów na mapę domen + „źródło prawdy = `app/api/`".
+- **`CLAUDE.md` → schemat bazy**: wskazanie migracji/`types.ts` jako źródła prawdy + lista „as-built
+  deltas" (`score` 0007, `is_audit` 0011, `was_truncated` 0009, `audit_round` 0010, `score_offset`…).
+- **`CLAUDE.md` → Batch API**: oznaczone jako niezbudowane (design intent; bulk import nie istnieje).
+- **`lib/audits/scheduler.ts`**: docstring `prepareAudit` mówił „generate fresh questions via Sonnet"
+  → poprawiony na „reuse existing open questions, no AI". Zmiana wyłącznie w komentarzu.
+- **`README.md`**: zakres migracji `0010 → 0011`; notka o CLAUDE.md (as-built, źródło prawdy API/schemat).
+
+### Walidacja
+- Grep CLAUDE.md: zero osieroconych odwołań do usuniętych rzeczy (`generate-audit`, auto-merge,
+  day_7/30/90 przy imporcie, 3-tier search, import-bulk/url) poza celowymi notkami „usunięto/niezbudowane".
+- **Nie uruchamiano `tsc`** — jedyna zmiana w `.ts` to komentarz (nie wpływa na kompilację).
+- Zero zmian w logice/zachowaniu aplikacji. Migracje, schemat bazy, runtime nietknięte.
+
+### Uwaga na przyszłość
+`PROGRESS.md` sam jest z tyłu — brakuje wpisu o redesignie self-grade z 2026-06-15
+(top był 2026-06-03). Nie backfillowałem (nie moja praca), ale warto mieć świadomość luki.
+
+---
+
+## 2026-06-15 — Audyty: self-graded recall (zamiast pytań generowanych przez AI)
+
+> _Wpis backfillowany 2026-06-16 — w trakcie rekoncyliacji CLAUDE.md wyszło, że ten redesign nie miał wpisu w PROGRESS.md (top był 2026-06-03). Treść odtworzona z `tasks/todo.md` + `ai-os/.../decisions.md`._
+
+### Powód
+Pytania otwarte generowane w audycie przez Sonnet były za drogie czasowo (użytkownik
+ledwie wyrabiał się z Deep Dive) i kosztowo. Dodatkowo „martwy bootstrap" sprawiał, że
+opanowane materiały nigdy nie trafiały do kolejki audytów. Decyzja: audyt = **self-graded
+recall bez AI**.
+
+### Zmiana
+- **Audyt reużywa istniejących pytań otwartych** materiału (`AUDIT_QUESTIONS_PER_MATERIAL = 2`),
+  rotacja oldest-reviewed first. Zero generowania, zero wywołań AI w cyklu audytu.
+- **Samoocena**: użytkownik ocenia recall na 4 poziomach (Pustka / Mgliście / Wyraźnie /
+  Krystalicznie = 1–4) → mapowane na score 1–10 → napędza drabinę interwałów. Brak oceny AI,
+  brak `performance_score` z modelu.
+- **Migracja `0011_audit_self_grade.sql`**: kolumna `reviews.is_audit` izoluje oceny audytowe
+  od „latest score of an open question" — czytanego przez bramę mastery, kolejkę Deep Dive
+  i detektory luk (każdy taki czytelnik filtruje `is_audit = false`).
+- **Naprawiony bootstrap**: `enrollMasteredMaterials` (sweep przy wejściu na `/sessions/audit`)
+  dopina round-1 opanowanym materiałom, niezależnie od crona.
+- **Usunięto** `lib/ai/generate-audit.ts` + prompt `generate-audit`.
+
+### Walidacja
+- Build green (`tsc` 0 błędów, `eslint` 0 błędów).
+- **WYMAGA** zastosowania migracji `0011` przed uruchomieniem nowego kodu (zapytania filtrują
+  `is_audit`).
+
+### TODO przyszła iteracja
+Dedykowana luka „decayed mastery" — 5. detektor czytający `is_audit = true` (dane już otagowane).
+
+---
+
 ## 2026-06-03 (2) — Deep Dive: kolejka tylko <6 + świeże; brama bez średniej
 
 ### Powód
@@ -74,75 +147,6 @@ pojedyncza uparta szóstka blokowała materiał w nieskończoność i nie wpuszc
 
 ---
 
-## 2026-05-31 — Przeprojektowanie audytu: model adaptacyjny „pull", skonsolidowana sesja
-
-### Powód
-Stary audyt przeciążał użytkownika i de facto nie działał (0 wykonanych). Audyty
-powstawały przy imporcie (3 wiersze 7/30/90 dni × 3 pytania/materiał), bez limitu i
-konsolidacji → kolejka rosła szybciej niż dało się ją czyścić. Decyzje produktowe
-potwierdzone z użytkownikiem: jedna wspólna sesja (≤3 pytania, 1/materiał), model „pull"
-bez presji, start dopiero po opanowaniu materiału, interwały adaptacyjne wg wyniku.
-
-### Zmiana
-- **Migracja `0010_adaptive_audits.sql`**: kolumna `audit_round`, `trigger` += `'adaptive'`,
-  cleanup backlogu (`pending` → `skipped`), unikalny indeks „1 pending/materiał".
-- **`lib/audits/intervals.ts`** (+ test, 7/7 pass): drabina `[7,21,60,150,365]`,
-  `nextAuditInterval(round, score)` — dobry wynik wspina się, słaby spada (podłoga 7d).
-- **`lib/processing/pipeline.ts`**: usunięte tworzenie audytów przy imporcie.
-- **`lib/audits/scheduler.ts`**: `prepareAudit` → 1 pytanie; `scheduleNextAudit`,
-  `scheduleFirstAuditIfMastered` (brama mastery używa `computeSectionStatus`), `createPendingAudit`.
-- **`app/api/sessions/start/route.ts`** (`mode:'audit'`): pulowa, skonsolidowana sesja —
-  ≤3 najstarszych due audytów (różne materiały), 1 pytanie każdy, jedna sesja, `queued_remaining`.
-- **`app/api/sessions/[id]/end/route.ts`**: rozlicza wszystkie audyty sesji (perf + adaptacyjny
-  reschedule); pomija audyty bez odpowiedzi (zostają pending); dla `deep_dive` — brama mastery.
-- **UI**: nowa `app/(app)/sessions/audit/run/page.tsx` (zastąpiła `[audit_id]`), uproszczona
-  lista `audit/page.tsx` (Do sprawdzenia / Nadchodzące / Wykonane, etykiety „Audyt #N").
-- **Surfacing „pull"**: `session-items.ts` audit `alert:false`; `bottom-nav.tsx` — audyty nie
-  zasilają czerwonej plakietki; dashboard kafel „Audyty gotowe"; `generate-audit` prompt 1 pyt.
-  + framing wg rundy.
-- **Dev**: `force-audit-due` dostosowany (tworzy/cofa adaptacyjny pending).
-
-### Walidacja
-- `node --test lib/audits/intervals.test.ts` — 7/7 pass.
-- `npx tsc --noEmit` — clean. `npx eslint` (zmienione pliki) — clean. `npm run build` — OK
-  (trasa `/sessions/audit/run` obecna, `[audit_id]` usunięta).
-- **DO ZROBIENIA przez użytkownika**: zastosować migrację 0010 na Supabase; e2e ręcznie
-  (opanuj materiał → powstaje 1 pending audyt; `force-audit-due` na ≥4 materiałach → sesja
-  daje 3 pytania, reszta w kolejce; reschedule wg wyniku). Nie ruszano fiszek/FSRS, Deep Dive,
-  oceny, kalibracji, luk.
-
----
-
-## 2026-05-21 — Pipeline AI: migracja na tool use (eliminacja `JSON.parse` failures przy imporcie)
-
-### Powód
-Import materiału wywalał się komunikatem `Expected ',' or '}' after property value in JSON at position 130 (line 4 column 106)`. Źródło: 6 callsite'ów wołało `complete()` (zwykły tekst) i parsowało odpowiedź przez `parseAIJson()` + `JSON.parse`. Model raz na ileś-tam razy zwracał JSON ze złamaną składnią (najpewniej nieescape'owany cudzysłów w treści `front`/`answer_reference`) — wszystkie 4 wbudowane warianty naprawy w `parseAIJson` padały i błąd bulgotał do UI. CLAUDE.md jawnie zalecał "Use structured output (JSON mode) for any operation that returns more than free text" — pipeline tej zasady nie spełniał.
-
-### Zmiana
-- **Nowa funkcja `completeWithTool<T>()`** w [lib/ai/anthropic.ts](lib/ai/anthropic.ts) — wywołuje Anthropic Messages API z `tools` + `tool_choice: { type: "tool", name, disable_parallel_tool_use: true }`. Wymusza na modelu zwrot pojedynczego tool call, którego `input` jest już sparsowany jako obiekt przez API — `JSON.parse` po naszej stronie znika. Zachowuje prompt caching (cache_control na system prompt). Wrapper trackAICall pozostaje bez zmian (sygnatura `{ result, usage }` identyczna).
-- **6 callsite'ów zmigrowanych** na `completeWithTool` z lokalnymi `ToolDefinition` (JSON schema obok zod schemy — zod nadal waliduje belt-and-suspenders):
-  - [lib/processing/generate-items.ts](lib/processing/generate-items.ts) — `submit_cloze_cards`, `submit_open_questions`
-  - [lib/processing/compress-and-tag.ts](lib/processing/compress-and-tag.ts) — `submit_tags` (`compressMaterial` zostawione na `complete()`, bo zwraca czysty tekst)
-  - [lib/ai/validate-open.ts](lib/ai/validate-open.ts) — `submit_validation`
-  - [lib/ai/detect-gaps.ts](lib/ai/detect-gaps.ts) — `submit_ranked_gaps`
-  - [lib/ai/generate-audit.ts](lib/ai/generate-audit.ts) — `submit_audit_questions`
-- **Usunięty** `lib/ai/json.ts` (`parseAIJson` + 4 helpery do naprawy JSON-a) — zero importerów po migracji. Mniej kodu, mniej pułapek.
-
-### Walidacja
-- `npx tsc --noEmit` — clean.
-- `npx eslint` na 6 dotkniętych plikach — clean.
-- Nie uruchamiałem dev servera — fix jest po stronie serwera/pipeline'u, weryfikacja end-to-end wymaga re-importu materiału przez UI (`/materials/import` → "Spróbuj ponownie" lub świeży upload). Istniejące materiały i `items` w bazie nietknięte.
-
-### Decyzje samodzielne (warto wiedzieć)
-- **JSON schema wpisane ręcznie** zamiast użycia `zod-to-json-schema` — schematy są małe, dodanie nowej zależności nie jest tego warte. Zod nadal waliduje wynik (belt-and-suspenders na wypadek, gdyby kiedyś tool schema rozjechał się z zodem).
-- **Prompty pozostawione bez zmian** — zawierają instrukcje "JEDYNIE poprawny JSON, bez ozdób", które po przejściu na tool use są martwą sugestią. Nie szkodzą (model i tak ignoruje, bo `tool_choice` wymusza tool call), ale przy najbliższej okazji można je posprzątać.
-- **`generateClaudePrompt`** w `lib/ai/generate-claude-prompt.ts` zwraca tekst (nie JSON) i nie był ruszany.
-
-### Follow-up: defensywna walidacja tool payloadu
-Po migracji na tool use wyszedł drugi failure mode: Haiku 4.5 raz na ileś-tam razy zwraca pole `questions` zadeklarowane w schemacie jako `type: "array"` jako **stringified JSON** (cały array jako jeden string). Anthropic w docs przyznaje, że tool's input_schema jest mocną sugestią, nie sztywnym kontraktem. → Dodany [lib/ai/tool-output.ts](lib/ai/tool-output.ts) z `parseToolPayload<T>()`: po nieudanym `safeParse` patrzy w zod issues, dla każdego `invalid_type` z `expected: "array"|"object"` próbuje `JSON.parse` na odpowiednim polu i waliduje ponownie. Przy ostatecznej porażce loguje surowy payload (truncated do 2000 znaków) + zod issues do `console.error`. Wszystkie 6 callsite'ów (cloze/open/audit/tags/validate/gaps) zmigrowane na ten helper.
-
----
-
 ## Starsze wpisy
 
-Wpisy z **2026-05-09 i wcześniejsze** (UI Redesign v3, M3 Phases 1–10, całe M2, całe M1, bootstrap) przeniesione do [docs/progress-archive.md](docs/progress-archive.md) — by utrzymać ten plik pod 200 linii (patrz zasada na górze).
+Wpisy z **2026-05-31 i wcześniejsze** (adaptacyjne audyty, tool-use pipeline, UI Redesign v3, M3 Phases 1–10, całe M2, całe M1, bootstrap) przeniesione do [docs/progress-archive.md](docs/progress-archive.md) — by utrzymać ten plik pod 200 linii (patrz zasada na górze).
