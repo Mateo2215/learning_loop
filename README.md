@@ -23,6 +23,12 @@ Personal learning application that closes the gap between podcast consumption an
 - **ts-fsrs** for spaced repetition
 - **Tailwind + shadcn/ui**, PWA with a hand-written service worker, offline session queue (`idb`)
 
+## Prerequisites
+
+- **Node.js 20+** (Next.js 16 requires Node 20.9 or later)
+- A **Supabase** project (free tier is enough) — the first migration enables the `vector`, `pg_cron` and `pgcrypto` extensions automatically
+- An **Anthropic API key** and a **Voyage AI API key**
+
 ## Getting started
 
 ```bash
@@ -31,7 +37,7 @@ cp .env.local.example .env.local   # fill in Supabase + Anthropic + Voyage keys
 npm run dev                          # http://localhost:3000
 ```
 
-Apply the SQL migrations in `supabase/migrations/` (in order, `0001` → `0011`) via the Supabase SQL Editor.
+Apply the SQL migrations in `supabase/migrations/` (in order, `0001` → `0012`) via the Supabase SQL Editor.
 
 ## Project documentation
 
@@ -45,3 +51,7 @@ Apply the SQL migrations in `supabase/migrations/` (in order, `0001` → `0011`)
 **Deployed and in daily use** (Vercel + Supabase, including mobile). M1 (core loop), M2 (smart layer) and M3 (polish & mobile) are complete.
 
 The app is in a **use-and-iterate-reactively** mode — no active development push; changes land when real use surfaces a concrete need. Remaining items are optional / nice-to-have (dispute UI, bulk/URL import, voice input, Lighthouse audit, Sentry) and tracked in `tasks/todo.md`.
+
+## License
+
+[MIT](LICENSE)

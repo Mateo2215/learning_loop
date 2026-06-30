@@ -1,16 +1,16 @@
 # CLAUDE.md - Learning Loop
 
-> Personal learning application that closes the gap between podcast consumption and validated knowledge retention. Built for one user (Mateusz) with single-tenant architecture. **Read this file completely before starting any work on the project.**
+> Personal learning application that closes the gap between podcast consumption and validated knowledge retention. Built for one user with single-tenant architecture. **Read this file completely before starting any work on the project.**
 
 ---
 
 ## 🎯 Project North Star
 
-**The problem we're solving**: Mateusz consumes 3 NotebookLM podcasts daily during walks. He has no validation of comprehension and no spaced retrieval mechanism. Information evaporates.
+**The problem we're solving**: The user consumes 3 NotebookLM podcasts daily during walks. There is no validation of comprehension and no spaced retrieval mechanism. Information evaporates.
 
 **The solution**: Active recall + spaced repetition + AI validation + closed loop with Claude.ai for filling knowledge gaps.
 
-**Success metric**: Mateusz uses this app daily for 1 hour and his retention of consumed material improves measurably (he reports being able to apply knowledge in work contexts months after initial exposure).
+**Success metric**: The user uses this app daily for 1 hour and their retention of consumed material improves measurably (being able to apply knowledge in work contexts months after initial exposure).
 
 **Anti-goals** (things this app explicitly is NOT):
 - Not a generic flashcard app (Anki exists)
@@ -22,7 +22,7 @@
 
 ## 👤 User Context
 
-Mateusz is a finance professional transitioning toward AI-enabled finance roles. He has:
+The user is a finance professional transitioning toward AI-enabled finance roles. They have:
 - Strong technical foundation (Next.js, Supabase, Python, Claude Code)
 - Polish primary language, but uses English technical terms (e.g., "net working capital", not "kapitał obrotowy netto")
 - Diverse learning interests: Finance, Programming, AI/ML, Soft skills, General
@@ -36,7 +36,7 @@ Mateusz is a finance professional transitioning toward AI-enabled finance roles.
 
 ### Why these technologies
 
-**Next.js 16 (App Router) + TypeScript**: Mateusz knows the stack. App Router because we need streaming, server actions, and clean API routes. TypeScript because the data model is complex enough that runtime bugs would be expensive. (Bootstrapped on 16.2.4 — the original plan said 15, but `create-next-app` shipped 16.)
+**Next.js 16 (App Router) + TypeScript**: The user knows the stack. App Router because we need streaming, server actions, and clean API routes. TypeScript because the data model is complex enough that runtime bugs would be expensive. (Bootstrapped on 16.2.4 — the original plan said 15, but `create-next-app` shipped 16.)
 
 **Supabase (Postgres + Auth + Realtime + pgvector)**: One service for four concerns. Realtime is critical for multi-device sync. pgvector is critical for semantic search and deduplication. Free tier covers our scale.
 
@@ -430,7 +430,7 @@ Re-checks already-mastered material on an adaptive schedule, at **zero AI cost**
 
 Use library `ts-fsrs` (npm package, well-maintained). Don't implement from scratch.
 
-**Configuration for Mateusz**:
+**Configuration for the user**:
 ```typescript
 const fsrsParams = {
   request_retention: 0.90,    // target 90% retention
@@ -481,7 +481,7 @@ Implemented in `lib/processing/pipeline.ts` (`processMaterial`). Async backgroun
 
 ## 📱 Mobile-First Session UI
 
-The session UI is the **most important** UX surface. Mateusz uses it during/after walks. Optimize ruthlessly.
+The session UI is the **most important** UX surface. The user uses it during/after walks. Optimize ruthlessly.
 
 ### Layout principles
 
@@ -773,7 +773,7 @@ When user imports material after using prompt:
 
 9. **Don't leak the Anthropic API key**: Server-side only. Use Next.js server actions or API routes, never client-side calls to Anthropic.
 
-10. **Don't over-engineer**: Mateusz wants a working tool, not a perfect one. Prefer simple solutions that ship over elegant ones that don't.
+10. **Don't over-engineer**: The user wants a working tool, not a perfect one. Prefer simple solutions that ship over elegant ones that don't.
 
 ---
 
@@ -810,14 +810,14 @@ This file is for context preservation across Claude Code sessions. Keep it under
 
 ## 💬 Communication with the User
 
-Mateusz prefers:
+The user prefers:
 - Direct, partner-like tone (not deferential)
 - Important things highlighted but accurately, not dramatized
 - Polish for product/feature discussions, English for code
 - Concrete recommendations with reasoning, not endless options
 - Acknowledgment when uncertain, with concrete next steps to resolve
 
-When in doubt about a decision, propose a concrete approach with rationale and ask for confirmation. Don't ask open-ended "what do you think?" questions - that wastes Mateusz's time.
+When in doubt about a decision, propose a concrete approach with rationale and ask for confirmation. Don't ask open-ended "what do you think?" questions - that wastes the user's time.
 
 ---
 

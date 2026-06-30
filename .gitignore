@@ -59,3 +59,6 @@ supabase/.temp
 
 # logs
 *.log
+
+# design reference (kept local, not for public repo)
+design_handoff/
