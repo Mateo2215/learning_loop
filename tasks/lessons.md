@@ -82,6 +82,15 @@ Project-specific gotchas. For universal patterns see `../../global-lessons.md`.
 - **Nav item count changed in Phase 10 (5 not 4).** Phase 11 smoke test spec said "4 itemy desktop / 4 ikony mobile" — the nav was restructured in Phase 10 to add Statystyki as a top-level item. Smoke test spec was stale. Verify nav by counting actual rendered items, not by spec.
 - **Dark accent colour is `#E8915E`, not `#D97A47`** as written in the original smoke test. The colour was tuned in Phase 10 during warm-palette work. Both are rust/orange tones; the current one has better contrast in dark mode. Update any spec references.
 
+## Audit isolation — `reviews.is_audit` (self-graded recall, 2026-06-15+)
+
+- **Każdy czytelnik „ostatniego score'a pytania otwartego" MUSI filtrować `is_audit = false`.** To `reviews`-owy odpowiednik historycznej pułapki z `audit_id is null` (sekcja „M2 audits" niżej). Audytowy review (self-grade, `is_audit = true`) ma `score`, ale należy do osobnego toru — nie wolno go brać jako mastery Deep Dive. Pełna lista czytelników (checklist przy każdej zmianie tego zbioru):
+  1. **Kolejka rundy** — `getLatestReviewByItem` w `app/api/sessions/start/route.ts` ✓
+  2. **Licznik nawigacji** — `countUnmasteredOpen` w `lib/db/counts.ts` ✓
+  3. **Selektor Deep Dive (SSR)** — `getLatestScoresForItems` + zapytania w `fetchDeepDiveStats` w `app/(app)/sessions/deep-dive/page.tsx` — **przeoczone do 2026-06-30**, dodane teraz.
+  4. Detektory luk correctness/staleness w `lib/gaps/detector.ts` (4 z 5 filtrują `is_audit = false`; `decayed_mastery` celowo czyta `is_audit = true`).
+- **Lekcja:** zapis reguły w `CLAUDE.md` („every such reader filters is_audit = false") NIE wystarczył — jeden czytelnik (strona selektora, dołożona później przy redesignie UI) został pominięty. Objaw nie był błędem, lecz **cichą sprzecznością dwóch powierzchni**: selektor pokazywał `needs_followup` / „X poniżej 6", a runda dawała pustkę („Brak pytań otwartych"). Sprzeczność „A mówi luka, B mówi pusto" przy tym samym materiale to sygnatura rozjazdu filtra isolation. Przy każdej zmianie zbioru czytelników — **grepuj zapytania czytające `score`, nie ufaj prozie w docu.**
+
 ## M2 audits
 
 > ⚠️ **Historyczne — opisuje przed-06-15 model audytu (AI-generated questions, Sonnet).** Redesign 2026-06-15 zrobił z audytu **self-graded recall, zero AI** (reużycie istniejących pytań otwartych, brak generowania, brak wywołań Sonnet, brak nowych `items`). Lekcje poniżej zostawione jako rekord gotchas tamtego modelu; nie odzwierciedlają obecnego zachowania. Stan faktyczny: CLAUDE.md → „Topic Audits — self-graded recall" + `lib/audits/`.
