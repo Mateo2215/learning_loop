@@ -16,6 +16,7 @@ const RankedGapSchema = z.object({
     "stale_topic",
     "rising_failures",
     "never_consolidated",
+    "decayed_mastery",
   ]),
   title: z.string().min(3),
   severity: z.enum(["low", "medium", "high"]),
@@ -39,7 +40,7 @@ const SUBMIT_GAPS_TOOL: ToolDefinition = {
         items: {
           type: "object",
           properties: {
-            gap_type: { type: "string", enum: ["low_correct_rate", "stale_topic", "rising_failures", "never_consolidated"] },
+            gap_type: { type: "string", enum: ["low_correct_rate", "stale_topic", "rising_failures", "never_consolidated", "decayed_mastery"] },
             title: { type: "string", minLength: 3 },
             severity: { type: "string", enum: ["low", "medium", "high"] },
             affected_tags: { type: "array", items: { type: "string" } },

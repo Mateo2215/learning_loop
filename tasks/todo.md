@@ -2,9 +2,15 @@
 
 ## Latest work (po Private-Use Polish)
 
+- [x] **2026-06-30 — 5. detektor luki „decayed mastery"** (zaplanowany 06-29, wdrożony). Lustro 4 detektorów: czyta `reviews` z `is_audit = true`, grupuje po `material_id`, bierze najnowszy audytowy `score`, odpala lukę przy `score ≤ AUDIT_POOR_SCORE` (3, reużyta stała z `lib/audits/intervals.ts`). Pliki: migracja `0012_decayed_mastery_gap.sql` (DROP+ADD CHECK z 5. wartością), `lib/db/types.ts` (`GapType`), `lib/gaps/detector.ts` (`detectDecayedMastery` + podpięcie do `runAllDetectors`), `lib/ai/detect-gaps.ts` (Zod enum + tool JSON schema), `lib/ai/prompts/detect-gaps.ts` (opis typu). **Niespodzianka wyłapana przez `tsc`:** dwie wyczerpujące mapy `Record<GapType, string>` w UI (`gaps-client.tsx`, `[id]/detail-client.tsx`) wymagały etykiety „Osłabione opanowanie" — domknięte. Build green (tsc 0, eslint 0). **Realnie odpala tylko samoocena „Pustka" (1→score 2);** „Mgliście" (5) > 3, świadomie — spójne z drabiną interwałów. **WYMAGA przed deployem:** zastosować migrację `0012` w Supabase (inaczej CHECK odrzuci insert nowego typu).
 - [x] **2026-06-15 — Audyty: self-graded recall** (zamiast generowanych pytań otwartych + oceny AI). Audyt reużywa istniejących pytań otwartych (2/materiał), użytkownik ocenia się sam (Pustka/Mgliście/Wyraźnie/Krystalicznie → wynik 1–10 → drabina interwałów). **Zero wywołań AI** w cyklu audytu. Migracja `0011_audit_self_grade.sql` (kolumna `reviews.is_audit` izolująca self-grade od bramy mastery / kolejki Deep Dive / detektorów luk). Naprawiony bootstrap: `enrollMasteredMaterials` (sweep przy wejściu na `/sessions/audit`) dopina round-1 opanowanym materiałom. Usunięto `lib/ai/generate-audit.ts` + prompt. **TODO przyszła iteracja:** luka „decayed mastery" (5. detektor czytający `is_audit=true`). **WYMAGA:** zastosować migrację `0011` przed uruchomieniem nowego kodu (zapytania filtrują `is_audit`). Build green (tsc 0, eslint 0 err).
 - [x] **2026-05-31 — Przeprojektowanie audytów na model „pull"** (skonsolidowana sesja ≤3 pytania, adaptacyjne interwały, start dopiero po opanowaniu materiału). Migracja `0010_adaptive_audits.sql`. Szczegóły w PROGRESS.md.
 - [x] **2026-06-03 — Brama zaliczania Deep Dive** (podłoga 6, kolejka serwuje tylko <6 + świeże, średnia nie bramkuje). Szczegóły w PROGRESS.md.
+
+## Operacyjne — przed następnym deployem
+
+- [x] **Migracja `0012_decayed_mastery_gap.sql` zastosowana w Supabase** (2026-06-30) — CHECK na `gap_type` przyjmuje już `decayed_mastery`.
+- [ ] **Deploy kodu** detektora `decayed_mastery` na prod (Vercel). Migracja jest już w bazie, więc bezpiecznie — kod gotowy, build green.
 
 ## Current Session - Private-Use Polish
 

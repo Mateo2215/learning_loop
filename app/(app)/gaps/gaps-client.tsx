@@ -15,6 +15,7 @@ const GAP_TYPE_LABEL: Record<GapType, string> = {
   stale_topic: "Zaniedbany temat",
   rising_failures: "Rosnące porażki",
   never_consolidated: "Brak utrwalenia",
+  decayed_mastery: "Osłabione opanowanie",
 };
 
 const SEVERITY_BORDER: Record<GapSeverity, string> = {

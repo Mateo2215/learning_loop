@@ -27,7 +27,7 @@ export type AuditTrigger = "day_7" | "day_30" | "day_90" | "resurrection" | "ada
 
 export type AuditStatus = "pending" | "completed" | "skipped";
 
-export type GapType = "low_correct_rate" | "stale_topic" | "rising_failures" | "never_consolidated";
+export type GapType = "low_correct_rate" | "stale_topic" | "rising_failures" | "never_consolidated" | "decayed_mastery";
 
 export type GapSeverity = "low" | "medium" | "high";
 

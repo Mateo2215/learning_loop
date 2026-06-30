@@ -11,6 +11,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { GapType } from "@/lib/db/types";
+import { AUDIT_POOR_SCORE } from "@/lib/audits/intervals";
 
 export interface GapCandidate {
   gap_type: GapType;
@@ -300,6 +301,63 @@ export async function detectNeverConsolidated(
 }
 
 /**
+ * Materials that were mastered (passed the gate → entered audits) but whose
+ * most recent self-graded audit score came back poor (≤ AUDIT_POOR_SCORE).
+ *
+ * Mirror of the other four detectors: they all filter `is_audit = false`, this
+ * one reads `is_audit = true`. It catches "decayed mastery" — recall that
+ * weakened after a material was already mastered — a signal invisible to the
+ * correctness/staleness detectors above.
+ *
+ * Reuses AUDIT_POOR_SCORE (3) from the audit interval ladder — same threshold
+ * that drops a material a rung. Given the self-grade mapping (1→2, 2→5, 3→8,
+ * 4→10), in practice only a "Pustka" (self_grade 1 → score 2) fires this.
+ */
+export async function detectDecayedMastery(
+  supabase: SupabaseClient,
+  userId: string
+): Promise<GapCandidate[]> {
+  const { data: reviews } = await supabase
+    .from("reviews")
+    .select("material_id, score, created_at, materials!inner(title)")
+    .eq("user_id", userId)
+    .eq("is_audit", true)
+    .not("score", "is", null)
+    .order("created_at", { ascending: false });
+
+  if (!reviews) return [];
+
+  type Row = {
+    material_id: string;
+    score: number | null;
+    materials: { title: string } | { title: string }[];
+  };
+
+  // Rows are newest-first; keep only the latest audit score per material.
+  const latestByMaterial = new Map<string, { score: number; title: string }>();
+  for (const r of reviews as Row[]) {
+    if (latestByMaterial.has(r.material_id)) continue;
+    if (r.score === null) continue;
+    const mat = Array.isArray(r.materials) ? r.materials[0] : r.materials;
+    latestByMaterial.set(r.material_id, { score: r.score, title: mat?.title ?? "?" });
+  }
+
+  const candidates: GapCandidate[] = [];
+  for (const [matId, { score, title }] of latestByMaterial.entries()) {
+    if (score <= AUDIT_POOR_SCORE) {
+      candidates.push({
+        gap_type: "decayed_mastery",
+        affected_tags: [],
+        affected_materials: [matId],
+        metric: score,
+        rationale: `"${title}" — opanowany materiał, audyt recall słaby (score ${score}/10)`,
+      });
+    }
+  }
+  return candidates;
+}
+
+/**
  * Run all detectors and return a flat candidate list. Caller (the API route)
  * passes this to the Sonnet ranker.
  */
@@ -307,11 +365,12 @@ export async function runAllDetectors(
   supabase: SupabaseClient,
   userId: string
 ): Promise<GapCandidate[]> {
-  const [a, b, c, d] = await Promise.all([
+  const [a, b, c, d, e] = await Promise.all([
     detectLowCorrectRate(supabase, userId),
     detectStaleTopics(supabase, userId),
     detectRisingFailures(supabase, userId),
     detectNeverConsolidated(supabase, userId),
+    detectDecayedMastery(supabase, userId),
   ]);
-  return [...a, ...b, ...c, ...d];
+  return [...a, ...b, ...c, ...d, ...e];
 }
