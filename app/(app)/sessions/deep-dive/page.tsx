@@ -351,11 +351,13 @@ async function fetchDeepDiveStats(
       .from("reviews")
       .select("id", { count: "exact", head: true })
       .eq("user_id", userId)
+      .eq("is_audit", false)
       .in("item_id", openItemIds),
     supabase
       .from("reviews")
       .select("score, created_at")
       .eq("user_id", userId)
+      .eq("is_audit", false)
       .in("item_id", openItemIds)
       .not("score", "is", null)
       .order("created_at", { ascending: false })
@@ -364,6 +366,7 @@ async function fetchDeepDiveStats(
       .from("reviews")
       .select("item_id, user_answer, score, ai_feedback_positive, ai_feedback_negative, created_at")
       .eq("user_id", userId)
+      .eq("is_audit", false)
       .in("item_id", openItemIds)
       .order("created_at", { ascending: false })
       .limit(1),
@@ -483,6 +486,7 @@ async function getLatestScoresForItems(
     .from("reviews")
     .select("item_id, score, created_at")
     .eq("user_id", userId)
+    .eq("is_audit", false) // self-graded audit reviews must not pollute Deep Dive's latest score
     .in("item_id", itemIds)
     .order("created_at", { ascending: false });
 
